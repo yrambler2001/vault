@@ -1,72 +1,63 @@
-# Secure Vault — Password Manager
+# Secure Vault — Password Manager & Authenticator
 
-Self-hosted encrypted password manager with USB RAID-1 backup.
+A self-hosted, offline-first, zero-knowledge password and TOTP (2FA) manager built with modern web standards. It features advanced biometric unlocking via WebAuthn PRF and physical USB RAID-1 backup syncing.
 
-## ⚠️ Security Requirements
+## Features
 
-**This application MUST be run over HTTPS at all times**, including during
-development. **Plain HTTP is NOT supported and will NOT work.**
+- **Password Management:** Securely store, organize, and generate strong passwords.
+- **Built-in TOTP Authenticator:** Manage Two-Factor Authentication (2FA) codes directly in your vault via QR code scanning, image imports, or manual entry.
+- **Zero-Knowledge Architecture:** All encryption (AES-256-GCM) happens strictly client-side. The server never sees your master password, TOTP secrets, encryption keys or unencrypted vault data.
+- **Argon2id Key Derivation:** Utilizes the industry-standard Argon2id algorithm (winner of the Password Hashing Competition) for all key derivation. By being both memory-hard and CPU-hard, Argon2id provides state-of-the-art resistance against GPU and ASIC brute-force attacks, ensuring your master password and API keys are virtually impossible to crack even if the encrypted data is captured.
+- **Biometric WebAuthn (PRF):** Unlock your vault and authenticate to the server using device biometrics (TouchID, FaceID, Windows Hello) or hardware security keys via the WebAuthn PRF extension.
+- **USB RAID-1 Backup:** Automatic, offline vault replication to multiple configurable USB drives. Keep physical, air-gapped backups of your encrypted vault.
+- **Hardened Web Security:** The backend is rigorously protected against common web vulnerabilities:
+  - **Granular Rate Limiting:** Endpoint-specific limiters (Global, Auth, Read, Write, Setup) with proxy-trust support actively block brute-force and DoS attacks.
+  - **CSRF Protection:** State-changing API endpoints are protected by an HMAC-based Synchronizer Token Pattern bound strictly to the user's session.
+  - **XSS & CSP:** Strict Content Security Policy (via Helmet) prevents malicious script execution. Additionally, primary Data Encryption Keys (DEKs) are flagged as `nonExtractable` in the Web Crypto API, severely limiting the impact of any potential XSS attacks.
+  - **Strict CORS & Cookies:** Cross-Origin Resource Sharing is locked to the configured frontend URL. Sessions are managed via in-memory, HMAC-signed tokens stored exclusively in `httpOnly`, `secure`, and `SameSite=Strict` cookies.
+  - **Concurrency & DoS Defenses:** Mutex-based write locks prevent race conditions during vault updates, while aggressive server timeouts protect against Slowloris connection-exhaustion attacks.
 
-The following features require a secure context (HTTPS):
-- Session cookies (`secure: true` — browsers refuse to send these over HTTP)
-- WebAuthn API (completely unavailable over HTTP)
-- Web Crypto API / SubtleCrypto (unavailable over HTTP)
-- CSRF protection (depends on secure cookies)
+---
 
-The backend will **refuse to start** without valid TLS certificates configured
-via `TLS_CERT_PATH` and `TLS_KEY_PATH` environment variables. There is no
-HTTP fallback mode and there never will be.
+## 🛠️ Tech Stack
 
-For development, self-signed certificates are generated automatically by Vite
-for the frontend, and can be created manually for the backend (see Setup below).
+**Frontend:** React 19, TypeScript, Vite, Tailwind CSS, SimpleWebAuthn, Hash-WASM (Argon2id)
 
-For production, use proper TLS certificates (e.g., Let's Encrypt).
+**Backend:** Node.js, Express, TypeScript, Zod, Async-Mutex, Helmet
 
-## ⚠️ Sessions Are In-Memory Only
+**Cryptography:** Web Crypto API, Argon2id, AES-256-GCM, HMAC-SHA256
 
-All sessions are stored in server memory. **A server restart will terminate
-ALL active sessions.** Users must re-authenticate after a restart. This is
-**by design** — it ensures no stale session data persists on disk, reduces
-attack surface, and the HMAC secret regeneration on restart automatically
-invalidates any stolen session tokens.
+---
 
-## Architecture
+## 🏗️ Architecture & Security Model
 
-```
-Two independent security layers:
+Secure Vault utilizes two completely independent security layers. Compromising one does not compromise the other.
 
-Layer 1 — Server Access (API Key OR WebAuthn)
-  Option A: API key → Argon2id (client-side) → client computes Verifier (SHA-256)
-            Server issues a one-time Nonce challenge.
-            Client sends HMAC-SHA256(Verifier, Nonce) back to the server.
-            The raw Argon2 hash never leaves the client during login, preventing replay attacks.
-  Option B: WebAuthn → platform authenticator → server verifies assertion
-            Credentials stored in data/config/api-webauthn.json
+### Layer 1 — Server Access (API Key OR WebAuthn)
 
-  Session: HMAC-signed httpOnly secure cookie (SameSite=Strict)
-  Sessions rotate on sensitive operations (vault write).
-  Max 5 concurrent sessions, strict absolute 30-minute timeout.
-  CSRF protection via synchronizer token pattern on all mutating endpoints.
+- **Option A (API Key):** Client runs Argon2id → computes Verifier (SHA-256). The server issues a one-time Nonce challenge. The client responds with `HMAC-SHA256(Verifier, Nonce)`. The raw hash never leaves the client, preventing replay attacks.
+- **Option B (WebAuthn):** Platform authenticator verifies assertion against server-stored credentials.
+- **Sessions:** Stored entirely in-memory using HMAC-signed, `httpOnly`, `secure` cookies with `SameSite=Strict`. Sessions rotate on sensitive operations and are completely wiped on server restart.
 
-Layer 2 — Vault Encryption (Master Password OR PRF Biometrics)
-  Option A: Master password → Argon2id → KEK → unwrap DEK → decrypt vault
-  Option B: WebAuthn PRF → KEK → unwrap DEK → decrypt vault
+### Layer 2 — Vault Encryption (Master Password OR PRF Biometrics)
 
-  Entirely client-side. Server never sees the master password or PRF output.
+- **Option A (Master Password):** Argon2id KDF → Key Encryption Key (KEK) → unwrap Data Encryption Key (DEK) → decrypt vault.
+- **Option B (WebAuthn PRF):** Hardware PRF output → KEK → unwrap DEK → decrypt vault.
+- **Encryption:** All vault contents (passwords, usernames, TOTP secrets, notes) are encrypted using AES-256-GCM before ever leaving the browser.
 
-These use DIFFERENT credentials. Compromising one does not help with the other.
-```
+---
 
 ## Known Security Properties & Limitations
 
 ### Vault metadata is stored in plaintext
 
-The encrypted vault file (`data/vault.json`) contains plaintext metadata:
+The encrypted vault file (`data/vault.json`) contains necessary plaintext metadata:
+
 - `vaultId`, `passwordSalt`, `kdfParams`, `version`, timestamps
 
 This is by design — the metadata is needed before decryption can occur.
-The actual password entries are encrypted with AES-256-GCM. An attacker
-with access to the vault file can see *when* the vault was modified and
+The actual password and TOTP entries are encrypted with AES-256-GCM. An attacker
+with access to the vault file can see _when_ the vault was modified and
 the KDF parameters, but not the contents.
 
 ### USB drives contain full vault replicas
@@ -74,7 +65,7 @@ the KDF parameters, but not the contents.
 Vault data written to USB drives includes the complete VaultDocument:
 metadata, wrapped keys, and encrypted data. This is **by design** — USB
 drives serve as complete backup replicas that can restore the vault
-independently. The actual password entries remain encrypted with AES-256-GCM.
+independently. The actual password/TOTP entries remain encrypted with AES-256-GCM.
 
 These USB drives are intended to be used as **fixed backup storage**
 (like internal hard drives), not as removable media carried in pockets.
@@ -100,10 +91,11 @@ detection. Each version is independently integrity-checked via SHA-256
 sidecar files. This is **by design** — the current integrity model is
 sufficient for the threat model (fixed USB drives, not removable media).
 
-### Best-effort memory clearing in JavaScript
+### JavaScript Memory Constraints
 
 The `clearArrayBuffer` function zeros buffers after use, but this is
 NOT cryptographically guaranteed due to:
+
 - V8 JIT compilation may retain copies in optimized code
 - The garbage collector may move buffers, leaving copies
 - JavaScript strings are immutable and cannot be zeroed
@@ -134,6 +126,7 @@ mkdir -p backend/certs
 openssl req -x509 -newkey rsa:2048 -keyout backend/certs/key.pem \
   -out backend/certs/cert.pem -days 365 -nodes \
   -subj "/CN=localhost"
+
 ```
 
 ### 2. Configure Environment
@@ -142,6 +135,7 @@ openssl req -x509 -newkey rsa:2048 -keyout backend/certs/key.pem \
 cd backend
 cp .env.example .env
 # Edit .env — set TLS_CERT_PATH, TLS_KEY_PATH, and VAULT_DRIVES
+
 ```
 
 ### 3. USB Drive Configuration
@@ -154,12 +148,14 @@ VAULT_DRIVES=USB1:E:\secure-vault,USB2:F:\secure-vault,USB3:G:\secure-vault,USB4
 
 # Linux example:
 VAULT_DRIVES=USB1:/mnt/usb1/secure-vault,USB2:/mnt/usb2/secure-vault
+
 ```
 
 The specified directories will be created automatically when you initialize
 each drive through the UI.
 
 **Path restrictions:**
+
 - Paths must NOT be filesystem roots (e.g., `E:\` or `/`)
 - Paths containing `..` are rejected
 - Duplicate paths are rejected at startup
@@ -175,6 +171,7 @@ TRUST_PROXY=1
 
 # Two proxies (e.g., Cloudflare → nginx):
 TRUST_PROXY=2
+
 ```
 
 **WARNING:** If behind a proxy and `TRUST_PROXY` is not set, all rate limiting
@@ -192,9 +189,39 @@ npm run dev
 cd frontend
 npm install
 npm run dev
+
 ```
 
 ### 6. Access
 
 Open `https://localhost:5173` in your browser.
 Accept the self-signed certificate warning (development only).
+
+## ⚠️ Security Requirements
+
+**This application MUST be run over HTTPS at all times**, including during
+development. **Plain HTTP is NOT supported and will NOT work.**
+
+The following features require a secure context (HTTPS):
+
+- Session cookies (`secure: true` — browsers refuse to send these over HTTP)
+- WebAuthn API (completely unavailable over HTTP)
+- Web Crypto API / SubtleCrypto (unavailable over HTTP)
+- CSRF protection (depends on secure cookies)
+
+The backend will **refuse to start** without valid TLS certificates configured
+via `TLS_CERT_PATH` and `TLS_KEY_PATH` environment variables. There is no
+HTTP fallback mode and there never will be.
+
+For development, self-signed certificates are generated automatically by Vite
+for the frontend, and can be created manually for the backend (see Setup below).
+
+For production, use proper TLS certificates (e.g., Let's Encrypt).
+
+## ⚠️ Sessions Are In-Memory Only
+
+All sessions are stored in server memory. **A server restart will terminate
+ALL active sessions.** Users must re-authenticate after a restart. This is
+**by design** — it ensures no stale session data persists on disk, reduces
+attack surface, and the HMAC secret regeneration on restart automatically
+invalidates any stolen session tokens.
