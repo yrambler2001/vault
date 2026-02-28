@@ -38,7 +38,7 @@ export function SetupVault({ onComplete, onLogout, showNotification, showError, 
 
       const newDek = await cryptoLib.generateDEKSimple();
       const wrappedDEK = await cryptoLib.wrapDEK(newDek, kek);
-      const initialData = await cryptoLib.encryptPayload([], newDek);
+      const initialData = await cryptoLib.encryptPayload({ passwords: [], totps: [] }, newDek);
 
       const payload = {
         meta: {

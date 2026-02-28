@@ -7,6 +7,7 @@ import { VaultError, ErrorCodes, friendlyMessages } from '../../lib/errors';
 import { SessionBar } from '../SessionBar';
 import { NotificationBanner, Notification } from '../NotificationBanner';
 import type { VaultMeta } from '../../lib/api';
+import type { TOTPEntry } from '../totp/TOTPPanel';
 
 export interface UnlockResult {
   /** Non-extractable DEK for encrypt/decrypt operations */
@@ -14,6 +15,7 @@ export interface UnlockResult {
   /** Extractable DEK for wrapping with new KEKs (device registration) */
   dekExtractable: CryptoKey;
   passwords: PasswordEntry[];
+  totps: TOTPEntry[];
   vaultMeta: VaultMeta & { createdAt: string; updatedAt: string };
   vaultVersion: number;
 }
@@ -26,6 +28,12 @@ export interface PasswordEntry {
   notes: string;
   createdAt: string;
   modifiedAt: string;
+}
+
+/** Shape of decrypted vault data (v2 with TOTP support) */
+interface VaultPayload {
+  passwords: PasswordEntry[];
+  totps?: TOTPEntry[];
 }
 
 interface Props {
@@ -54,6 +62,17 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
   useEffect(() => {
     checkBiometricDevices();
   }, [checkBiometricDevices]);
+
+  const normalizeVaultData = (raw: unknown): { passwords: PasswordEntry[]; totps: TOTPEntry[] } => {
+    if (raw && typeof raw === 'object') {
+      const obj = raw as VaultPayload;
+      return {
+        passwords: Array.isArray(obj.passwords) ? obj.passwords : [],
+        totps: Array.isArray(obj.totps) ? obj.totps : [],
+      };
+    }
+    return { passwords: [], totps: [] };
+  };
 
   const handleUnlock = async (method: 'password' | 'biometric') => {
     if (method === 'password' && !masterPasswordInput) {
@@ -105,19 +124,22 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
         dekExtractable = dekNonExtractable;
       }
 
-      let decryptedData: PasswordEntry[];
+      let decryptedRaw: unknown;
       try {
-        decryptedData = (await cryptoLib.decryptPayload(vaultData.data.ciphertext, vaultData.data.iv, dekNonExtractable)) as PasswordEntry[];
+        decryptedRaw = await cryptoLib.decryptPayload(vaultData.data.ciphertext, vaultData.data.iv, dekNonExtractable);
       } catch {
         throw new VaultError(ErrorCodes.VAULT_CORRUPTED, friendlyMessages.VAULT_CORRUPTED);
       }
+
+      const { passwords, totps } = normalizeVaultData(decryptedRaw);
 
       setMasterPasswordInput('');
 
       onUnlock({
         dek: dekNonExtractable,
         dekExtractable,
-        passwords: decryptedData,
+        passwords,
+        totps,
         vaultMeta: vaultData.meta,
         vaultVersion: vaultData.meta.version,
       });
