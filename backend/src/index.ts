@@ -323,7 +323,7 @@ app.get('/api/auth/session', requireSession, (req: Request, res: Response) => {
 
 app.use(
   '/api/auth/webauthn',
-  authLimiter,
+  readLimiter,
   (req: Request, res: Response, next: NextFunction) => {
     const publicPaths = ['/auth-options', '/authenticate'];
     if (publicPaths.some((p) => req.path === p)) {

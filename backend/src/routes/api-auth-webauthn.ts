@@ -18,7 +18,7 @@ import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthen
 import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { validate } from '../middleware/validate';
 import { withWriteLock } from '../middleware/concurrency';
-import { writeLimiter } from '../middleware/rate-limiters';
+import { authLimiter, writeLimiter } from '../middleware/rate-limiters';
 import * as apiAuthService from '../services/api-auth.service';
 import { logger } from '../utils/logger';
 
@@ -189,7 +189,7 @@ apiAuthWebauthnRouter.get('/auth-options', async (_req: Request, res: Response):
 
 // ── Authenticate (public — returns session) ──
 
-apiAuthWebauthnRouter.post('/authenticate', validate(AuthResponseSchema), async (req: Request, res: Response): Promise<void> => {
+apiAuthWebauthnRouter.post('/authenticate', authLimiter, validate(AuthResponseSchema), async (req: Request, res: Response): Promise<void> => {
   try {
     const { challengeId, response } = req.body;
     const rp = getRP();
