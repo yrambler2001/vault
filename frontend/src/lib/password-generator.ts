@@ -10,7 +10,7 @@ export interface GeneratorOptions {
 }
 
 export const DEFAULT_GENERATOR_OPTIONS: GeneratorOptions = {
-  length: 20,
+  length: 32,
   uppercase: true,
   lowercase: true,
   digits: true,
