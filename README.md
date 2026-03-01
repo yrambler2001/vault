@@ -2,6 +2,8 @@
 
 A self-hosted, offline-first, zero-knowledge password and TOTP (2FA) manager built with modern web standards. It features advanced biometric unlocking via WebAuthn PRF, physical USB RAID-1 backup syncing, and a folder-based organization system.
 
+📸 **[View Application Screenshots](assets/SCREENSHOTS.md)**
+
 ## Features
 
 - **Password Management:** Securely store, organize, and generate strong passwords.
