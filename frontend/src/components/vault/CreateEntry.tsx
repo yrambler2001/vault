@@ -13,8 +13,26 @@ interface Props {
 export function CreateEntry({ kind, defaultFolder, onSave, onCancel }: Props) {
   const [name, setName] = useState('');
   const [folder, setFolder] = useState(defaultFolder);
-  const [fields, setFields] = useState<FieldDefinition[]>([]);
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [initialState] = useState(() => {
+    if (kind === 'password') {
+      const defaultFieldId = crypto.randomUUID();
+      return {
+        fields: [
+          {
+            id: defaultFieldId,
+            name: 'Password',
+            type: 'single' as const,
+            searchable: false,
+            hidden: true,
+          },
+        ],
+        values: { [defaultFieldId]: '' },
+      };
+    }
+    return { fields: [], values: {} };
+  });
+  const [fields, setFields] = useState<FieldDefinition[]>(initialState.fields);
+  const [values, setValues] = useState<Record<string, string>>(initialState.values);
   const [totpSecret, setTotpSecret] = useState('');
   const [totpMode, setTotpMode] = useState<'manual' | 'camera' | 'import' | null>(null);
   const [error, setError] = useState<string | null>(null);
