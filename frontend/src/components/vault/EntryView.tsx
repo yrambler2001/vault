@@ -18,6 +18,7 @@ export function EntryView({ entry, onBack, onUpdate, onDelete }: Props) {
   const [editFields, setEditFields] = useState<FieldDefinition[]>([...entry.fields]);
   const [editValues, setEditValues] = useState<Record<string, string>>({ ...entry.values });
   const [editTotp, setEditTotp] = useState(entry.totp ? { ...entry.totp } : undefined);
+  const [showTotpSecret, setShowTotpSecret] = useState(false);
 
   // Reset edit state when entry changes
   useEffect(() => {
@@ -27,6 +28,7 @@ export function EntryView({ entry, onBack, onUpdate, onDelete }: Props) {
     setEditValues({ ...entry.values });
     setEditTotp(entry.totp ? { ...entry.totp } : undefined);
     setEditing(false);
+    setShowTotpSecret(false);
   }, [entry.id, entry.name, entry.folder, entry.fields, entry.values, entry.totp]);
 
   const handleSave = () => {
@@ -47,6 +49,7 @@ export function EntryView({ entry, onBack, onUpdate, onDelete }: Props) {
     setEditValues({ ...entry.values });
     setEditTotp(entry.totp ? { ...entry.totp } : undefined);
     setEditing(false);
+    setShowTotpSecret(false);
   };
 
   const handleDelete = () => {
@@ -170,12 +173,22 @@ export function EntryView({ entry, onBack, onUpdate, onDelete }: Props) {
         {entry.kind === 'totp' && editing && editTotp && (
           <div className="mb-4">
             <label className="mb-1 block text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">TOTP Secret (Base32)</label>
-            <input
-              type="text"
-              value={editTotp.secret}
-              onChange={(e) => setEditTotp({ ...editTotp, secret: e.target.value.replace(/\s/g, '').toUpperCase() })}
-              className="w-full rounded border border-gray-300 bg-white px-3 py-2 font-mono text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type={showTotpSecret ? 'text' : 'password'}
+                value={editTotp.secret}
+                onChange={(e) => setEditTotp({ ...editTotp, secret: e.target.value.replace(/\s/g, '').toUpperCase() })}
+                className="w-full rounded border border-gray-300 bg-white px-3 py-2 font-mono text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+              />
+              <button
+                type="button"
+                onClick={() => setShowTotpSecret(!showTotpSecret)}
+                className="shrink-0 rounded border border-gray-300 bg-gray-50 p-2 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 dark:hover:text-gray-300"
+                title={showTotpSecret ? 'Hide secret' : 'Reveal secret'}
+              >
+                <Eye size={18} />
+              </button>
+            </div>
           </div>
         )}
 
