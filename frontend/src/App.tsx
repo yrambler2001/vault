@@ -68,6 +68,8 @@ export default function App() {
   const vaultVersionRef = useRef<number>(0);
   const autoLockTimer = useRef<AutoLockTimer | null>(null);
   const handleServerLogoutRef = useRef<() => void>(() => {});
+  // eslint-disable-next-line react-hooks/purity
+  const lastActiveRef = useRef<number>(Date.now());
 
   // ── Theme ──
 
@@ -161,12 +163,14 @@ export default function App() {
     if (appState === 'unlocked') {
       autoLockTimer.current = new AutoLockTimer(handleVaultLock, autoLockMs);
       autoLockTimer.current.reset();
+      lastActiveRef.current = Date.now();
 
       let lastReset = 0;
       const THROTTLE_MS = 30_000;
 
       const resetTimer = () => {
         const now = Date.now();
+        lastActiveRef.current = now;
         if (now - lastReset > THROTTLE_MS) {
           lastReset = now;
           autoLockTimer.current?.reset();
@@ -375,7 +379,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <SessionBar onSessionExpired={handleServerLogout} />
+      <SessionBar onSessionExpired={handleServerLogout} autoLockMs={autoLockMs} lastActiveRef={lastActiveRef} />
       <NotificationBanner notification={notification} onDismiss={dismissNotification} />
       <div className="mx-auto min-h-screen max-w-3xl bg-gray-50 px-4 pt-10 pb-8 dark:bg-gray-900">
         {/* Header */}
