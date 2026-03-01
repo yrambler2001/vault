@@ -1,19 +1,28 @@
 # Secure Vault — Password Manager & Authenticator
 
-A self-hosted, offline-first, zero-knowledge password and TOTP (2FA) manager built with modern web standards. It features advanced biometric unlocking via WebAuthn PRF and physical USB RAID-1 backup syncing.
+A self-hosted, offline-first, zero-knowledge password and TOTP (2FA) manager built with modern web standards. It features advanced biometric unlocking via WebAuthn PRF, physical USB RAID-1 backup syncing, and a folder-based organization system.
 
 ## Features
 
 - **Password Management:** Securely store, organize, and generate strong passwords.
 - **Built-in TOTP Authenticator:** Manage Two-Factor Authentication (2FA) codes directly in your vault via QR code scanning, image imports, or manual entry.
+- **Folder-Based Organization:** Organize passwords and TOTP entries into nested folders. Browse entries with breadcrumb navigation and search across all entries and folders.
+- **Flexible Entry Fields:** Each entry starts with just a name. Add custom fields with configurable names, types (single-line/multi-line), searchability, and visibility (hidden with `*`). Reconfigure field properties at any time.
+- **Field Security:** Hidden fields require explicit confirmation via an alert dialog before revealing, preventing accidental exposure from misclicks. Fields are read-only until edit mode is activated.
+- **Password Generation:** Built-in password generator with configurable length and character sets (ABC, abc, 123, #$&). Available as an expandable panel at the top of the vault view.
+- **Dark Mode:** Toggle between light and dark themes. Preference is saved in localStorage and persists across sessions.
+- **Mobile-Friendly:** Optimized for iPhone and mobile devices with proper viewport settings, touch-friendly UI elements, and responsive layouts.
+
+---
+
 - **Zero-Knowledge Architecture:** All encryption (AES-256-GCM) happens strictly client-side. The server never sees your master password, TOTP secrets, encryption keys or unencrypted vault data.
 - **Argon2id Key Derivation:** Utilizes the industry-standard Argon2id algorithm (winner of the Password Hashing Competition) for all key derivation. By being both memory-hard and CPU-hard, Argon2id provides state-of-the-art resistance against GPU and ASIC brute-force attacks, ensuring your master password and API keys are virtually impossible to crack even if the encrypted data is captured.
-- **Biometric WebAuthn (PRF):** Unlock your vault and authenticate to the server using device biometrics (TouchID, FaceID, Windows Hello) or hardware security keys via the WebAuthn PRF extension.
+- **Biometric WebAuthn (PRF):** Unlock your vault and authenticate to the server using device biometrics (TouchID on Macbook, FaceID on iPhone, Windows Hello on Windows) or hardware security keys via the WebAuthn PRF extension.
 - **USB RAID-1 Backup:** Automatic, offline vault replication to multiple configurable USB drives. Keep physical, air-gapped backups of your encrypted vault.
 - **Hardened Web Security:** The backend is rigorously protected against common web vulnerabilities:
   - **Granular Rate Limiting:** Endpoint-specific limiters (Global, Auth, Read, Write, Setup) with proxy-trust support actively block brute-force and DoS attacks.
   - **CSRF Protection:** State-changing API endpoints are protected by an HMAC-based Synchronizer Token Pattern bound strictly to the user's session.
-  - **XSS & CSP:** Strict Content Security Policy (via Helmet) prevents malicious script execution. Additionally, primary Data Encryption Keys (DEKs) are flagged as `nonExtractable` in the Web Crypto API, severely limiting the impact of any potential XSS attacks.
+  - **XSS & CSP:** Strict Content Security Policy prevents malicious script execution. Additionally, primary Data Encryption Keys (DEKs) are flagged as `nonExtractable` in the Web Crypto API, severely limiting the impact of any potential XSS attacks.
   - **Strict CORS & Cookies:** Cross-Origin Resource Sharing is locked to the configured frontend URL. Sessions are managed via in-memory, HMAC-signed tokens stored exclusively in `httpOnly`, `secure`, and `SameSite=Strict` cookies.
   - **Concurrency & DoS Defenses:** Mutex-based write locks prevent race conditions during vault updates, while aggressive server timeouts protect against Slowloris connection-exhaustion attacks.
 
@@ -43,7 +52,7 @@ Secure Vault utilizes two completely independent security layers. Compromising o
 
 - **Option A (Master Password):** Argon2id KDF → Key Encryption Key (KEK) → unwrap Data Encryption Key (DEK) → decrypt vault.
 - **Option B (WebAuthn PRF):** Hardware PRF output → KEK → unwrap DEK → decrypt vault.
-- **Encryption:** All vault contents (passwords, usernames, TOTP secrets, notes) are encrypted using AES-256-GCM before ever leaving the browser.
+- **Encryption:** All vault contents (passwords, usernames, TOTP secrets, notes, custom fields) are encrypted using AES-256-GCM before ever leaving the browser.
 
 ---
 

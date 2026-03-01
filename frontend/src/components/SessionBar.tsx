@@ -58,7 +58,7 @@ export function SessionBar({ onSessionExpired }: Props) {
   const isLow = remaining > 0 && remaining < 5 * 60 * 1000;
 
   return (
-    <div className="fixed top-0 right-0 left-0 z-40 flex items-center justify-between bg-gray-800 px-4 py-1 text-xs text-white">
+    <div className="fixed top-0 right-0 left-0 z-40 flex items-center justify-between bg-gray-800 px-4 py-1 text-xs text-white dark:bg-gray-950">
       <div className="flex items-center gap-2">
         <Clock size={12} />
         <span>

@@ -45,88 +45,98 @@ export function USBDrivesPanel() {
     try {
       await api.initDrive(label);
       await refreshDrives();
-      showDriveMessage(`Drive "${label}" initialized.`);
+      showDriveMessage(`"${label}" initialized.`);
     } catch {
-      showDriveMessage('Failed to initialize drive');
+      showDriveMessage('Failed to initialize');
     }
   };
 
   const handleVerify = async (label: string) => {
     try {
       const result = await api.verifyDrive(label);
-      const msg =
+      showDriveMessage(
         `Integrity: ${result.valid}/${result.total} valid` +
-        (result.corrupted.length > 0 ? `, ${result.corrupted.length} corrupted` : '') +
-        (result.noSidecar.length > 0 ? `, ${result.noSidecar.length} no checksum` : '');
-      showDriveMessage(msg);
+          (result.corrupted.length > 0 ? `, ${result.corrupted.length} corrupted` : '') +
+          (result.noSidecar.length > 0 ? `, ${result.noSidecar.length} no checksum` : ''),
+      );
     } catch {
       showDriveMessage('Verification failed');
     }
   };
 
   return (
-    <div className="mb-8 rounded-lg border bg-white p-6 shadow-sm">
-      <div className="mb-4 flex items-center justify-between border-b pb-2">
-        <h2 className="flex items-center gap-2 text-xl font-bold">
-          <HardDrive size={20} /> USB Backup Drives
+    <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div className="mb-4 flex items-center justify-between border-b border-gray-200 pb-2 dark:border-gray-700">
+        <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-gray-100">
+          <HardDrive size={18} /> USB Backup Drives
         </h2>
         <div className="flex gap-2">
           <button
             onClick={handleSync}
             disabled={loadingDrives}
-            className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1 text-sm text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+            className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            <RefreshCw size={14} /> Sync All
+            <RefreshCw size={14} /> Sync
           </button>
           <button
             onClick={refreshDrives}
             disabled={loadingDrives}
-            className="rounded bg-gray-200 px-3 py-1 text-sm transition-colors hover:bg-gray-300 disabled:opacity-50"
+            className="rounded bg-gray-200 px-3 py-1 text-sm hover:bg-gray-300 disabled:opacity-50 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500"
           >
             Refresh
           </button>
         </div>
       </div>
 
-      {driveMessage && <div className="mb-3 rounded border border-blue-200 bg-blue-50 p-2 text-sm text-blue-700">{driveMessage}</div>}
+      {driveMessage && (
+        <div className="mb-3 rounded border border-blue-200 bg-blue-50 p-2 text-sm text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+          {driveMessage}
+        </div>
+      )}
 
       {!loaded ? (
-        <p className="text-gray-500 italic">Click Refresh to load drive status.</p>
+        <p className="text-gray-500 italic dark:text-gray-400">Click Refresh to load drive status.</p>
       ) : drives.length === 0 ? (
-        <p className="text-gray-500 italic">No drives configured. Set VAULT_DRIVES in backend .env file.</p>
+        <p className="text-gray-500 italic dark:text-gray-400">No drives configured.</p>
       ) : (
         <ul className="space-y-2">
           {drives.map((drive) => (
-            <li key={drive.configuredPath} className="flex items-center justify-between border-b py-2 last:border-0">
+            <li key={drive.configuredPath} className="flex items-center justify-between border-b border-gray-200 py-2 last:border-0 dark:border-gray-700">
               <div className="flex items-center gap-3">
-                <HardDrive size={18} className={drive.healthy ? 'text-green-600' : drive.accessible ? 'text-yellow-500' : 'text-gray-400'} />
+                <HardDrive
+                  size={18}
+                  className={
+                    drive.healthy
+                      ? 'text-green-600 dark:text-green-400'
+                      : drive.accessible
+                        ? 'text-yellow-500 dark:text-yellow-400'
+                        : 'text-gray-400 dark:text-gray-500'
+                  }
+                />
                 <div>
-                  <span className="font-medium">{drive.label}</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{drive.label}</span>
                   <div className="text-xs text-gray-400">{drive.configuredPath}</div>
-                  {drive.healthy && <span className="text-xs text-gray-500">{drive.versionCount} versions</span>}
-                  {!drive.accessible && <span className="text-xs text-red-500">Not accessible — drive may be disconnected</span>}
+                  {drive.healthy && <span className="text-xs text-gray-500 dark:text-gray-400">{drive.versionCount} versions</span>}
+                  {!drive.accessible && <span className="text-xs text-red-500">Not accessible</span>}
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {drive.accessible && !drive.healthy && !drive.vaultId && (
-                  <button
-                    onClick={() => handleInit(drive.label)}
-                    className="rounded bg-green-600 px-3 py-1 text-xs text-white transition-colors hover:bg-green-700"
-                  >
+                  <button onClick={() => handleInit(drive.label)} className="rounded bg-green-600 px-3 py-1 text-xs text-white hover:bg-green-700">
                     Initialize
                   </button>
                 )}
                 {!drive.accessible && (
-                  <span className="flex items-center gap-1 rounded bg-red-100 px-2 py-1 text-xs text-red-600">
+                  <span className="flex items-center gap-1 rounded bg-red-100 px-2 py-1 text-xs text-red-600 dark:bg-red-900/30 dark:text-red-400">
                     <AlertTriangle size={12} /> Offline
                   </span>
                 )}
                 {drive.healthy && (
                   <>
-                    <button onClick={() => handleVerify(drive.label)} className="text-xs text-blue-600 hover:text-blue-800">
+                    <button onClick={() => handleVerify(drive.label)} className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400">
                       Verify
                     </button>
-                    <span className="flex items-center gap-1 rounded bg-green-100 px-2 py-1 text-xs text-green-700">
+                    <span className="flex items-center gap-1 rounded bg-green-100 px-2 py-1 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-400">
                       <CheckCircle size={12} /> Active
                     </span>
                   </>

@@ -3,36 +3,39 @@ import * as cryptoLib from './lib/crypto';
 import * as webauthnLib from './lib/webauthn';
 import { api } from './lib/api';
 import type { VaultMeta } from './lib/api';
+import type { VaultEntry, VaultPayload } from './lib/types';
 import { VaultError, ErrorCodes, friendlyMessages } from './lib/errors';
 import { AutoLockTimer } from './lib/secure-state';
+import { getStoredTheme, setStoredTheme, applyTheme } from './lib/theme';
+import type { Theme } from './lib/theme';
 import { Notification } from './components/NotificationBanner';
 import { NotificationBanner } from './components/NotificationBanner';
 import { SessionBar } from './components/SessionBar';
+import { ThemeToggle } from './components/ui/ThemeToggle';
+import { PasswordGenerator } from './components/ui/PasswordGenerator';
 import { SetupApiKey } from './components/auth/SetupApiKey';
 import { LoginForm } from './components/auth/LoginForm';
 import { SetupVault } from './components/vault/SetupVault';
 import { LockedVault } from './components/vault/LockedVault';
-import type { PasswordEntry, UnlockResult } from './components/vault/LockedVault';
-import { PasswordsPanel } from './components/passwords/PasswordsPanel';
-import { TOTPPanel } from './components/totp/TOTPPanel';
-import type { TOTPEntry } from './components/totp/TOTPPanel';
+import type { UnlockResult } from './components/vault/LockedVault';
+import { VaultBrowser } from './components/vault/VaultBrowser';
 import { BiometricDevicesPanel } from './components/devices/BiometricDevicesPanel';
 import { ApiWebAuthnPanel } from './components/devices/ApiWebAuthnPanel';
 import { USBDrivesPanel } from './components/drives/USBDrivesPanel';
 import { Unlock, Save } from 'lucide-react';
-
 // ── Types ──
 
 type AppState = 'loading' | 'setup_api_key' | 'enter_api_key' | 'setup_vault' | 'locked' | 'unlocked';
 
-type ActiveTab = 'passwords' | 'totp' | 'devices' | 'drives';
+type ActiveTab = 'vault' | 'devices' | 'drives';
 
 const DEFAULT_AUTO_LOCK_MS = 5 * 60 * 1000;
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('loading');
   const [notification, setNotification] = useState<Notification | null>(null);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('passwords');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('vault');
+  const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
 
   // API Key state
   const [hasApiWebAuthn, setHasApiWebAuthn] = useState(false);
@@ -46,9 +49,7 @@ export default function App() {
   const [vaultVersion, setVaultVersion] = useState(0);
 
   // Editing state
-  const [editingPasswords, setEditingPasswords] = useState<PasswordEntry[]>([]);
-  const [editingTotps, setEditingTotps] = useState<TOTPEntry[]>([]);
-
+  const [editingEntries, setEditingEntries] = useState<VaultEntry[]>([]);
   /**
    * Dirty flag for unsaved changes detection.
    *
@@ -59,7 +60,6 @@ export default function App() {
    * set on any edit, cleared on save. This is intentional and by design.
    */
   const [isDirty, setIsDirty] = useState(false);
-
   // WebAuthn state
   const [webauthnAvailable, setWebauthnAvailable] = useState(false);
 
@@ -68,6 +68,17 @@ export default function App() {
   const vaultVersionRef = useRef<number>(0);
   const autoLockTimer = useRef<AutoLockTimer | null>(null);
   const handleServerLogoutRef = useRef<() => void>(() => {});
+
+  // ── Theme ──
+
+  useEffect(() => {
+    applyTheme(theme);
+    setStoredTheme(theme);
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((t) => (t === 'light' ? 'dark' : 'light'));
+  }, []);
 
   const setDekSafe = (key: CryptoKey | null) => {
     dekRef.current = key;
@@ -82,9 +93,7 @@ export default function App() {
 
   const showNotification = useCallback((type: Notification['type'], message: string) => {
     setNotification({ type, message });
-    if (type !== 'error') {
-      setTimeout(() => setNotification(null), 5000);
-    }
+    if (type !== 'error') setTimeout(() => setNotification(null), 5000);
   }, []);
 
   const showError = useCallback(
@@ -122,8 +131,7 @@ export default function App() {
     api.clearCsrfToken();
     setDekSafe(null);
     setDekExtractable(null);
-    setEditingPasswords([]);
-    setEditingTotps([]);
+    setEditingEntries([]);
     setIsDirty(false);
     setVaultVersionSafe(0);
     setVaultMeta(null);
@@ -131,7 +139,6 @@ export default function App() {
     setAppState('enter_api_key');
   }, []);
 
-  // Keep ref in sync
   useEffect(() => {
     handleServerLogoutRef.current = handleServerLogout;
   }, [handleServerLogout]);
@@ -141,8 +148,7 @@ export default function App() {
   const handleVaultLock = useCallback(() => {
     setDekSafe(null);
     setDekExtractable(null);
-    setEditingPasswords([]);
-    setEditingTotps([]);
+    setEditingEntries([]);
     setIsDirty(false);
     setVaultVersionSafe(0);
     autoLockTimer.current?.stop();
@@ -170,11 +176,12 @@ export default function App() {
       window.addEventListener('mousemove', resetTimer);
       window.addEventListener('keydown', resetTimer);
       window.addEventListener('click', resetTimer);
-
+      window.addEventListener('touchstart', resetTimer);
       return () => {
         window.removeEventListener('mousemove', resetTimer);
         window.removeEventListener('keydown', resetTimer);
         window.removeEventListener('click', resetTimer);
+        window.removeEventListener('touchstart', resetTimer);
         autoLockTimer.current?.stop();
       };
     }
@@ -193,7 +200,7 @@ export default function App() {
     }
   }, [isDirty]);
 
-  // ── Check WebAuthn availability ──
+  // ── WebAuthn check ──
 
   useEffect(() => {
     webauthnLib.isWebAuthnAvailable().then(setWebauthnAvailable);
@@ -206,40 +213,28 @@ export default function App() {
       try {
         const status = await api.getStatus();
         setHasApiWebAuthn(status.hasApiWebAuthn);
-
-        if (status.autoLockMinutes) {
-          setAutoLockMs(status.autoLockMinutes * 60 * 1000);
-        }
-
+        if (status.autoLockMinutes) setAutoLockMs(status.autoLockMinutes * 60 * 1000);
         if (!status.configured) {
           setAppState('setup_api_key');
           return;
         }
-
         try {
           const session = await api.getSession();
           if (session.valid) {
             // Session is valid — fetch CSRF token (handles page reload / F5)
             await api.fetchCsrfToken();
-
-            if (status.vaultCreated) {
-              setAppState('locked');
-            } else {
-              setAppState('setup_vault');
-            }
+            setAppState(status.vaultCreated ? 'locked' : 'setup_vault');
             return;
           }
         } catch {
           // No valid session
         }
-
         setAppState('enter_api_key');
       } catch {
         showNotification('error', friendlyMessages.NETWORK_ERROR);
         setAppState('enter_api_key');
       }
     };
-
     boot();
   }, [showNotification]);
 
@@ -248,11 +243,7 @@ export default function App() {
   const handleLoginSuccess = useCallback(async () => {
     const status = await api.getStatus();
     setHasApiWebAuthn(status.hasApiWebAuthn);
-    if (status.vaultCreated) {
-      setAppState('locked');
-    } else {
-      setAppState('setup_vault');
-    }
+    setAppState(status.vaultCreated ? 'locked' : 'setup_vault');
   }, []);
 
   // ── Unlock handler ──
@@ -260,8 +251,7 @@ export default function App() {
   const handleUnlock = useCallback((result: UnlockResult) => {
     setDekSafe(result.dek);
     setDekExtractable(result.dekExtractable);
-    setEditingPasswords(result.passwords);
-    setEditingTotps(result.totps);
+    setEditingEntries(result.entries);
     setIsDirty(false);
     setVaultMeta(result.vaultMeta);
     setVaultVersionSafe(result.vaultVersion);
@@ -276,16 +266,11 @@ export default function App() {
     if (!currentDek) return;
 
     try {
-      const payload = {
-        passwords: editingPasswords,
-        totps: editingTotps,
-      };
+      const payload: VaultPayload = { entries: editingEntries };
       const encrypted = await cryptoLib.encryptPayload(payload, currentDek);
       const result = await api.updateData(encrypted, currentVersion);
-
       setIsDirty(false);
       setVaultVersionSafe(result.version);
-
       if (result.usbDrives?.failed?.length > 0) {
         showNotification('warning', `${friendlyMessages.USB_WRITE_PARTIAL} Failed: ${result.usbDrives.failed.join(', ')}`);
       } else {
@@ -299,60 +284,22 @@ export default function App() {
         showError(e);
       }
     }
-  }, [editingPasswords, editingTotps, showNotification, showError]);
+  }, [editingEntries, showNotification, showError]);
 
-  // ── Password CRUD (local only, no auto-save) ──
+  // ── Entry CRUD ──
 
-  const handleAddPassword = useCallback(() => {
-    const newEntry: PasswordEntry = {
-      id: crypto.randomUUID(),
-      service: '',
-      username: '',
-      password: '',
-      notes: '',
-      createdAt: new Date().toISOString(),
-      modifiedAt: new Date().toISOString(),
-    };
-    setEditingPasswords((prev) => [...prev, newEntry]);
+  const handleAddEntry = useCallback((entry: VaultEntry) => {
+    setEditingEntries((prev) => [...prev, entry]);
     setIsDirty(true);
   }, []);
 
-  const handleUpdatePassword = useCallback((id: string, changes: Partial<PasswordEntry>) => {
-    setEditingPasswords((prev) => prev.map((p) => (p.id === id ? { ...p, ...changes, modifiedAt: new Date().toISOString() } : p)));
+  const handleUpdateEntry = useCallback((id: string, changes: Partial<VaultEntry>) => {
+    setEditingEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...changes, modifiedAt: new Date().toISOString() } : e)));
     setIsDirty(true);
   }, []);
 
-  /**
-   * Delete password entry.
-   *
-   * DESIGN NOTE: Uses window.confirm() for confirmation dialogs.
-   * This is a blocking synchronous call which is suboptimal for UI
-   * responsiveness, but is acceptable here because:
-   *   - Delete is an infrequent, destructive operation
-   *   - The blocking nature prevents accidental double-clicks
-   *   - A custom modal would add complexity for minimal benefit
-   * This is by design — a React modal could be added later if needed.
-   */
-  const handleDeletePassword = useCallback((id: string) => {
-    if (!window.confirm('Delete this password entry?')) return;
-    setEditingPasswords((prev) => prev.filter((p) => p.id !== id));
-    setIsDirty(true);
-  }, []);
-
-  // ── TOTP CRUD (local only, no auto-save) ──
-
-  const handleAddTOTP = useCallback((entry: TOTPEntry) => {
-    setEditingTotps((prev) => [...prev, entry]);
-    setIsDirty(true);
-  }, []);
-
-  const handleUpdateTOTP = useCallback((id: string, changes: Partial<TOTPEntry>) => {
-    setEditingTotps((prev) => prev.map((t) => (t.id === id ? { ...t, ...changes, modifiedAt: new Date().toISOString() } : t)));
-    setIsDirty(true);
-  }, []);
-
-  const handleDeleteTOTP = useCallback((id: string) => {
-    setEditingTotps((prev) => prev.filter((t) => t.id !== id));
+  const handleDeleteEntry = useCallback((id: string) => {
+    setEditingEntries((prev) => prev.filter((e) => e.id !== id));
     setIsDirty(true);
   }, []);
 
@@ -360,8 +307,8 @@ export default function App() {
 
   if (appState === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="text-lg text-gray-500">Loading Secure Vault...</div>
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-lg text-gray-500 dark:text-gray-400">Loading Secure Vault...</div>
       </div>
     );
   }
@@ -421,50 +368,52 @@ export default function App() {
   // ── Unlocked ──
 
   const tabs: { key: ActiveTab; label: string }[] = [
-    { key: 'passwords', label: `Passwords (${editingPasswords.length})` },
-    { key: 'totp', label: `2FA (${editingTotps.length})` },
+    { key: 'vault', label: `Vault (${editingEntries.length})` },
     { key: 'devices', label: 'Devices' },
     { key: 'drives', label: 'USB Drives' },
   ];
 
   return (
-    <>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <SessionBar onSessionExpired={handleServerLogout} />
       <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-      <div className="mx-auto min-h-screen max-w-3xl bg-gray-50 p-4 pt-10 md:p-8">
+      <div className="mx-auto min-h-screen max-w-3xl bg-gray-50 px-4 pt-10 pb-8 dark:bg-gray-900">
         {/* Header */}
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="flex items-center gap-2 text-2xl font-bold">
+        <div className="mb-4 flex items-center justify-between">
+          <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-100">
             <Unlock className="text-green-600" /> Secure Vault
           </h1>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <span className="text-xs text-gray-400">v{vaultVersion}</span>
             {isDirty && (
-              <button
-                onClick={handleManualSave}
-                className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1 text-sm text-white transition-colors hover:bg-blue-700"
-              >
+              <button onClick={handleManualSave} className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700">
                 <Save size={14} /> Save
               </button>
             )}
-            {isDirty && <span className="rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700">unsaved</span>}
-            <button onClick={handleVaultLock} className="rounded bg-amber-500 px-4 py-2 text-white transition-colors hover:bg-amber-600">
+            {isDirty && <span className="rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">unsaved</span>}
+            <button onClick={handleVaultLock} className="rounded bg-amber-500 px-3 py-1.5 text-sm text-white hover:bg-amber-600">
               Lock
             </button>
-            <button onClick={handleServerLogout} className="rounded bg-red-500 px-4 py-2 text-white transition-colors hover:bg-red-600">
+            <button onClick={handleServerLogout} className="rounded bg-red-500 px-3 py-1.5 text-sm text-white hover:bg-red-600">
               Logout
             </button>
           </div>
         </div>
 
+        {/* Password Generator */}
+        <PasswordGenerator />
+
         {/* Tab Navigation */}
-        <div className="mb-6 flex border-b">
+        <div className="mb-4 flex overflow-x-auto border-b border-gray-200 dark:border-gray-700">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.key ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+              className={`border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
+                activeTab === tab.key
+                  ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
               }`}
             >
               {tab.label}
@@ -473,11 +422,9 @@ export default function App() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'passwords' && (
-          <PasswordsPanel passwords={editingPasswords} onAdd={handleAddPassword} onUpdate={handleUpdatePassword} onDelete={handleDeletePassword} />
+        {activeTab === 'vault' && (
+          <VaultBrowser entries={editingEntries} onAddEntry={handleAddEntry} onUpdateEntry={handleUpdateEntry} onDeleteEntry={handleDeleteEntry} />
         )}
-
-        {activeTab === 'totp' && <TOTPPanel totps={editingTotps} onAdd={handleAddTOTP} onUpdate={handleUpdateTOTP} onDelete={handleDeleteTOTP} />}
 
         {activeTab === 'devices' && (
           <>
@@ -495,6 +442,6 @@ export default function App() {
 
         {activeTab === 'drives' && <USBDrivesPanel />}
       </div>
-    </>
+    </div>
   );
 }

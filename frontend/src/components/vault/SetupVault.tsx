@@ -38,7 +38,7 @@ export function SetupVault({ onComplete, onLogout, showNotification, showError, 
 
       const newDek = await cryptoLib.generateDEKSimple();
       const wrappedDEK = await cryptoLib.wrapDEK(newDek, kek);
-      const initialData = await cryptoLib.encryptPayload({ passwords: [], totps: [] }, newDek);
+      const initialData = await cryptoLib.encryptPayload({ entries: [] }, newDek);
 
       const payload = {
         meta: {
@@ -65,35 +65,37 @@ export function SetupVault({ onComplete, onLogout, showNotification, showError, 
     <>
       <SessionBar onSessionExpired={onLogout} />
       <NotificationBanner notification={notification} onDismiss={onDismissNotification} />
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 pt-8">
-        <div className="w-full max-w-md rounded-lg border bg-white p-8 shadow">
-          <h1 className="mb-2 flex items-center gap-2 text-2xl font-bold">
-            <Lock className="text-green-600" /> Create Vault
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 pt-8 dark:bg-gray-900">
+        <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-8 shadow dark:border-gray-700 dark:bg-gray-800">
+          <h1 className="mb-2 flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
+            <Lock className="text-green-600 dark:text-green-400" /> Create Vault
           </h1>
-          <p className="mb-6 text-sm text-gray-600">
+          <p className="mb-6 text-sm text-gray-600 dark:text-gray-400">
             Set your master password. This encrypts your vault — it <b>cannot</b> be recovered.
           </p>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Master Password</label>
+          <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Master Password</label>
           <input
             type="password"
             placeholder="Master password (min 8 chars)"
             value={masterPasswordInput}
             onChange={(e) => setMasterPasswordInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSetup()}
-            className="mb-2 w-full rounded border p-2"
+            className="mb-2 w-full rounded border border-gray-300 bg-white p-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
             disabled={loading}
           />
 
-          {/* Password strength meter */}
           {strength && (
             <div className="mb-4">
               <div className="mb-1 flex gap-1">
                 {[0, 1, 2, 3, 4].map((i) => (
-                  <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i <= strength.score ? strength.color : 'bg-gray-200'}`} />
+                  <div
+                    key={i}
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${i <= strength.score ? strength.color : 'bg-gray-200 dark:bg-gray-600'}`}
+                  />
                 ))}
               </div>
               <div className="flex items-start justify-between">
-                <span className="text-xs text-gray-500">{strength.label}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{strength.label}</span>
                 {strength.suggestions.length > 0 && <span className="text-xs text-gray-400">{strength.suggestions[0]}</span>}
               </div>
             </div>
@@ -106,7 +108,10 @@ export function SetupVault({ onComplete, onLogout, showNotification, showError, 
           >
             {loading ? 'Creating Vault...' : 'Create Vault'}
           </button>
-          <button onClick={onLogout} className="mt-4 w-full text-sm text-gray-500 transition-colors hover:text-gray-700">
+          <button
+            onClick={onLogout}
+            className="mt-4 w-full text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
             ← Change API key
           </button>
         </div>

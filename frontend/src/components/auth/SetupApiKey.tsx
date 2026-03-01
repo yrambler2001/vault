@@ -53,20 +53,20 @@ export function SetupApiKey({ onComplete, showNotification, showError, notificat
   return (
     <>
       <NotificationBanner notification={notification} onDismiss={onDismissNotification} />
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="w-full max-w-md rounded-lg border bg-white p-8 shadow">
-          <h1 className="mb-2 flex items-center gap-2 text-2xl font-bold">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-8 shadow dark:border-gray-700 dark:bg-gray-800">
+          <h1 className="mb-2 flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
             <Shield className="text-blue-600" /> Configure Server Access
           </h1>
-          <p className="mb-6 text-sm text-gray-600">Set an API key to protect access to this vault server.</p>
-          <label className="mb-1 block text-sm font-medium text-gray-700">API Key</label>
+          <p className="mb-6 text-sm text-gray-600 dark:text-gray-400">Set an API key to protect access to this vault server.</p>
+          <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
           <input
             type="password"
             placeholder="Choose an API key (min 8 chars)"
             value={apiKeyInput}
             onChange={(e) => setApiKeyInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSetup()}
-            className="mb-4 w-full rounded border p-2"
+            className="mb-4 w-full rounded border border-gray-300 bg-white p-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
             disabled={loading}
           />
           <button

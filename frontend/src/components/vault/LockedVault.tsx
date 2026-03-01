@@ -7,33 +7,14 @@ import { VaultError, ErrorCodes, friendlyMessages } from '../../lib/errors';
 import { SessionBar } from '../SessionBar';
 import { NotificationBanner, Notification } from '../NotificationBanner';
 import type { VaultMeta } from '../../lib/api';
-import type { TOTPEntry } from '../totp/TOTPPanel';
+import type { VaultEntry, VaultPayload } from '../../lib/types';
 
 export interface UnlockResult {
-  /** Non-extractable DEK for encrypt/decrypt operations */
   dek: CryptoKey;
-  /** Extractable DEK for wrapping with new KEKs (device registration) */
   dekExtractable: CryptoKey;
-  passwords: PasswordEntry[];
-  totps: TOTPEntry[];
+  entries: VaultEntry[];
   vaultMeta: VaultMeta & { createdAt: string; updatedAt: string };
   vaultVersion: number;
-}
-
-export interface PasswordEntry {
-  id: string;
-  service: string;
-  username: string;
-  password: string;
-  notes: string;
-  createdAt: string;
-  modifiedAt: string;
-}
-
-/** Shape of decrypted vault data (v2 with TOTP support) */
-interface VaultPayload {
-  passwords: PasswordEntry[];
-  totps?: TOTPEntry[];
 }
 
 interface Props {
@@ -62,17 +43,6 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
   useEffect(() => {
     checkBiometricDevices();
   }, [checkBiometricDevices]);
-
-  const normalizeVaultData = (raw: unknown): { passwords: PasswordEntry[]; totps: TOTPEntry[] } => {
-    if (raw && typeof raw === 'object') {
-      const obj = raw as VaultPayload;
-      return {
-        passwords: Array.isArray(obj.passwords) ? obj.passwords : [],
-        totps: Array.isArray(obj.totps) ? obj.totps : [],
-      };
-    }
-    return { passwords: [], totps: [] };
-  };
 
   const handleUnlock = async (method: 'password' | 'biometric') => {
     if (method === 'password' && !masterPasswordInput) {
@@ -103,7 +73,6 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
         throw new VaultError(ErrorCodes.VAULT_CORRUPTED, `Key slot "${slotId}" not found in vault.`);
       }
 
-      // Unwrap DEK as non-extractable for normal use
       let dekNonExtractable: CryptoKey;
       try {
         dekNonExtractable = await cryptoLib.unwrapDEK(wrappedKey.wrappedDEK, wrappedKey.iv, kek, false);
@@ -114,13 +83,10 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
         throw new VaultError(ErrorCodes.WRONG_PASSWORD, friendlyMessages.WRONG_PASSWORD);
       }
 
-      // Also unwrap as extractable for device registration
       let dekExtractable: CryptoKey;
       try {
         dekExtractable = await cryptoLib.unwrapDEK(wrappedKey.wrappedDEK, wrappedKey.iv, kek, true);
       } catch {
-        // If this fails, use the non-extractable one and device registration
-        // simply won't work. This shouldn't normally happen.
         dekExtractable = dekNonExtractable;
       }
 
@@ -131,15 +97,15 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
         throw new VaultError(ErrorCodes.VAULT_CORRUPTED, friendlyMessages.VAULT_CORRUPTED);
       }
 
-      const { passwords, totps } = normalizeVaultData(decryptedRaw);
+      const payload = decryptedRaw as VaultPayload;
+      const entries = Array.isArray(payload?.entries) ? payload.entries : [];
 
       setMasterPasswordInput('');
 
       onUnlock({
         dek: dekNonExtractable,
         dekExtractable,
-        passwords,
-        totps,
+        entries,
         vaultMeta: vaultData.meta,
         vaultVersion: vaultData.meta.version,
       });
@@ -156,17 +122,17 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
     <>
       <SessionBar onSessionExpired={onLogout} />
       <NotificationBanner notification={notification} onDismiss={onDismissNotification} />
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 pt-8">
-        <div className="w-full max-w-md rounded-lg border bg-white p-8 shadow">
-          <h1 className="mb-6 flex items-center gap-2 text-2xl font-bold">
-            <Lock className="text-amber-600" /> Vault Locked
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 pt-8 dark:bg-gray-900">
+        <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-8 shadow dark:border-gray-700 dark:bg-gray-800">
+          <h1 className="mb-6 flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
+            <Lock className="text-amber-600 dark:text-amber-400" /> Vault Locked
           </h1>
 
           {hasBiometrics && (
             <button
               onClick={() => handleUnlock('biometric')}
               disabled={loading}
-              className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg bg-gray-800 py-3 text-white transition-colors hover:bg-gray-900 disabled:opacity-50"
+              className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg bg-gray-800 py-3 text-white transition-colors hover:bg-gray-900 disabled:opacity-50 dark:bg-gray-700 dark:hover:bg-gray-600"
             >
               <Fingerprint size={20} />
               {loading ? 'Authenticating...' : 'Unlock with Biometrics'}
@@ -175,9 +141,9 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
 
           {hasBiometrics && (
             <div className="my-4 flex items-center gap-3">
-              <div className="flex-1 border-t border-gray-200" />
+              <div className="flex-1 border-t border-gray-200 dark:border-gray-600" />
               <span className="text-xs text-gray-400 uppercase">or use password</span>
-              <div className="flex-1 border-t border-gray-200" />
+              <div className="flex-1 border-t border-gray-200 dark:border-gray-600" />
             </div>
           )}
 
@@ -187,7 +153,7 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
             value={masterPasswordInput}
             onChange={(e) => setMasterPasswordInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleUnlock('password')}
-            className="mb-4 w-full rounded border p-2"
+            className="mb-4 w-full rounded border border-gray-300 bg-white p-2 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
             disabled={loading}
           />
           <button
@@ -197,7 +163,10 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
           >
             {loading ? 'Unlocking...' : 'Unlock with Password'}
           </button>
-          <button onClick={onLogout} className="mt-4 w-full text-sm text-gray-500 transition-colors hover:text-gray-700">
+          <button
+            onClick={onLogout}
+            className="mt-4 w-full text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
             ← Disconnect from server
           </button>
         </div>

@@ -80,27 +80,27 @@ export function LoginForm({ hasApiWebAuthn, webauthnAvailable, onLoginSuccess, s
   return (
     <>
       <NotificationBanner notification={notification} onDismiss={onDismissNotification} />
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="w-full max-w-md rounded-lg border bg-white p-8 shadow">
-          <h1 className="mb-2 flex items-center gap-2 text-2xl font-bold">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-8 shadow dark:border-gray-700 dark:bg-gray-800">
+          <h1 className="mb-2 flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
             <Key className="text-blue-600" /> Server Authentication
           </h1>
-          <p className="mb-6 text-sm text-gray-600">Enter your API key to access the vault server.</p>
+          <p className="mb-6 text-sm text-gray-600 dark:text-gray-400">Enter your API key to access the vault server.</p>
 
           {hasApiWebAuthn && webauthnAvailable && (
             <>
               <button
                 onClick={handleApiWebAuthnLogin}
                 disabled={loading}
-                className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg bg-gray-800 py-3 text-white transition-colors hover:bg-gray-900 disabled:opacity-50"
+                className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg bg-gray-800 py-3 text-white transition-colors hover:bg-gray-900 disabled:opacity-50 dark:bg-gray-700 dark:hover:bg-gray-600"
               >
                 <Fingerprint size={20} />
                 {loading ? 'Authenticating...' : 'Login with Biometrics'}
               </button>
               <div className="my-4 flex items-center gap-3">
-                <div className="flex-1 border-t border-gray-200" />
+                <div className="flex-1 border-t border-gray-200 dark:border-gray-600" />
                 <span className="text-xs text-gray-400 uppercase">or use API key</span>
-                <div className="flex-1 border-t border-gray-200" />
+                <div className="flex-1 border-t border-gray-200 dark:border-gray-600" />
               </div>
             </>
           )}
@@ -111,7 +111,7 @@ export function LoginForm({ hasApiWebAuthn, webauthnAvailable, onLoginSuccess, s
             value={apiKeyInput}
             onChange={(e) => setApiKeyInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleApiKeyLogin()}
-            className="mb-4 w-full rounded border p-2"
+            className="mb-4 w-full rounded border border-gray-300 bg-white p-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
             disabled={loading}
           />
           <button
