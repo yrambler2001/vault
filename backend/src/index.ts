@@ -103,24 +103,7 @@ app.use(globalLimiter);
 
 const frontendUrl = process.env.FRONTEND_URL || 'https://localhost:5173';
 
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        connectSrc: ["'self'", frontendUrl],
-        imgSrc: ["'self'", 'data:'],
-        fontSrc: ["'self'"],
-        frameSrc: ["'none'"],
-        objectSrc: ["'none'"],
-        baseUri: ["'self'"],
-        formAction: ["'self'"],
-      },
-    },
-  }),
-);
+app.use(helmet());
 
 app.use(
   cors({
