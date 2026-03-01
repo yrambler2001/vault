@@ -63,7 +63,7 @@ export function VaultBrowser({ entries, onAddEntry, onUpdateEntry, onDeleteEntry
 
   const handleSaveNewEntry = (entry: VaultEntry) => {
     onAddEntry(entry);
-    setViewState({ type: 'browse', path: currentPath });
+    setViewState({ type: 'entry', entryId: entry.id, returnPath: currentPath });
   };
 
   // ── Render: Entry View ──
