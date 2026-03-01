@@ -7,8 +7,18 @@ const ALG = { name: 'AES-GCM', length: 256 } as const;
 // ── Feature Detection ──
 
 export const isWebAuthnAvailable = async (): Promise<boolean> => {
-  if (!window.PublicKeyCredential) return false;
   try {
+    // 1. Basic WebAuthn Support
+    if (!window.PublicKeyCredential) return false;
+
+    // 2. Advanced Capability Check (Chrome 133+)
+    if (PublicKeyCredential.getClientCapabilities) {
+      const capabilities = await PublicKeyCredential.getClientCapabilities();
+      // Return true if it can handle passkeys at all (local or hybrid)
+      return capabilities.passkeyPlatformAuthenticator === true;
+    }
+
+    // 3. Fallback for older browsers
     return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
   } catch {
     return false;
