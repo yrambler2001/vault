@@ -14,22 +14,44 @@ export function CreateEntry({ kind, defaultFolder, onSave, onCancel }: Props) {
   const [name, setName] = useState('');
   const [folder, setFolder] = useState(defaultFolder);
   const [initialState] = useState(() => {
-    if (kind === 'password') {
-      const defaultFieldId = crypto.randomUUID();
-      return {
-        fields: [
-          {
-            id: defaultFieldId,
-            name: 'Password',
-            type: 'single' as const,
-            searchable: false,
-            hidden: true,
-          },
-        ],
-        values: { [defaultFieldId]: '' },
-      };
-    }
-    return { fields: [], values: {} };
+    const loginFieldId = crypto.randomUUID();
+    const passwordFieldId = crypto.randomUUID();
+    const websiteFieldId = crypto.randomUUID();
+
+    return {
+      fields: [
+        {
+          id: loginFieldId,
+          name: 'Login',
+          type: 'single' as const,
+          searchable: true,
+          hidden: false,
+        },
+        ...(kind === 'password'
+          ? [
+              {
+                id: passwordFieldId,
+                name: 'Password',
+                type: 'single' as const,
+                searchable: false,
+                hidden: true,
+              },
+            ]
+          : []),
+        {
+          id: websiteFieldId,
+          name: 'Website',
+          type: 'single' as const,
+          searchable: true,
+          hidden: false,
+        },
+      ],
+      values: {
+        [loginFieldId]: '',
+        ...(kind === 'password' ? { [passwordFieldId]: '' } : {}),
+        [websiteFieldId]: '',
+      },
+    };
   });
   const [fields, setFields] = useState<FieldDefinition[]>(initialState.fields);
   const [values, setValues] = useState<Record<string, string>>(initialState.values);
