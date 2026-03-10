@@ -217,13 +217,24 @@ export const unwrapDEK = async (wrappedBase64: string, ivBase64: string, kek: Cr
 
 export const encryptPayload = async (data: unknown, dek: CryptoKey): Promise<{ iv: string; ciphertext: string }> => {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, dek, new TextEncoder().encode(JSON.stringify(data)));
+
+  const jsonBytes = new TextEncoder().encode(JSON.stringify(data));
+
+  const compressedStream = new Response(jsonBytes).body!.pipeThrough(new CompressionStream('gzip'));
+  const compressedBytes = await new Response(compressedStream).arrayBuffer();
+
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, dek, compressedBytes);
+
   return { iv: toBase64(iv), ciphertext: toBase64(ciphertext) };
 };
 
 export const decryptPayload = async (ciphertextBase64: string, ivBase64: string, dek: CryptoKey): Promise<unknown> => {
-  const buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromBase64(ivBase64) }, dek, fromBase64(ciphertextBase64));
-  return JSON.parse(new TextDecoder().decode(buf));
+  const decryptedBuffer = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromBase64(ivBase64) }, dek, fromBase64(ciphertextBase64));
+
+  const decompressedStream = new Response(decryptedBuffer).body!.pipeThrough(new DecompressionStream('gzip'));
+  const decompressedBuffer = await new Response(decompressedStream).arrayBuffer();
+
+  return JSON.parse(new TextDecoder().decode(decompressedBuffer));
 };
 
 /**
