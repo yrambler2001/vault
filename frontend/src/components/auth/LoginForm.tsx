@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Key, Fingerprint } from 'lucide-react';
+import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import * as cryptoLib from '../../lib/crypto';
 import * as webauthnLib from '../../lib/webauthn';
 import { api } from '../../lib/api';
 import { VaultError, ErrorCodes, friendlyMessages } from '../../lib/errors';
 import { NotificationBanner, Notification } from '../NotificationBanner';
-import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 
 interface Props {
   hasApiWebAuthn: boolean;

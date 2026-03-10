@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Unlock, Save } from 'lucide-react';
 import * as cryptoLib from './lib/crypto';
 import * as webauthnLib from './lib/webauthn';
 import { api } from './lib/api';
@@ -8,8 +9,7 @@ import { VaultError, ErrorCodes, friendlyMessages } from './lib/errors';
 import { AutoLockTimer } from './lib/secure-state';
 import { getStoredTheme, setStoredTheme, applyTheme } from './lib/theme';
 import type { Theme } from './lib/theme';
-import { Notification } from './components/NotificationBanner';
-import { NotificationBanner } from './components/NotificationBanner';
+import { Notification, NotificationBanner } from './components/NotificationBanner';
 import { SessionBar } from './components/SessionBar';
 import { ThemeToggle } from './components/ui/ThemeToggle';
 import { PasswordGenerator } from './components/ui/PasswordGenerator';
@@ -22,7 +22,6 @@ import { VaultBrowser } from './components/vault/VaultBrowser';
 import { BiometricDevicesPanel } from './components/devices/BiometricDevicesPanel';
 import { ApiWebAuthnPanel } from './components/devices/ApiWebAuthnPanel';
 import { USBDrivesPanel } from './components/drives/USBDrivesPanel';
-import { Unlock, Save } from 'lucide-react';
 // ── Types ──
 
 type AppState = 'loading' | 'setup_api_key' | 'enter_api_key' | 'setup_vault' | 'locked' | 'unlocked';

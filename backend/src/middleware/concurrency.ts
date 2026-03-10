@@ -19,47 +19,45 @@ const writeMutex = new Mutex();
  *     release();
  *   }
  */
-export const withWriteLock = () => {
-  return async (_req: Request, res: Response, next: NextFunction) => {
-    let release: (() => void) | null = null;
+export const withWriteLock = () => async (_req: Request, res: Response, next: NextFunction) => {
+  let release: (() => void) | null = null;
 
-    try {
-      release = await writeMutex.acquire();
-    } catch (err) {
-      next(err);
-      return;
-    }
+  try {
+    release = await writeMutex.acquire();
+  } catch (err) {
+    next(err);
+    return;
+  }
 
-    const LOCK_TIMEOUT_MS = 30_000;
-    let released = false;
+  const LOCK_TIMEOUT_MS = 30_000;
+  let released = false;
 
-    const safeRelease = () => {
-      if (!released && release) {
-        released = true;
-        release();
-      }
-    };
-
-    // Attach the release function so the handler can call it explicitly
-    res.locals.releaseWriteLock = safeRelease;
-
-    // Safety nets: release on response completion or timeout
-    res.on('finish', safeRelease);
-    res.on('close', safeRelease);
-    res.on('error', safeRelease);
-
-    const timeout = setTimeout(safeRelease, LOCK_TIMEOUT_MS);
-
-    const clearSafetyTimeout = () => clearTimeout(timeout);
-    res.on('finish', clearSafetyTimeout);
-    res.on('close', clearSafetyTimeout);
-
-    try {
-      next();
-    } catch (err) {
-      safeRelease();
-      clearTimeout(timeout);
-      throw err;
+  const safeRelease = () => {
+    if (!released && release) {
+      released = true;
+      release();
     }
   };
+
+  // Attach the release function so the handler can call it explicitly
+  res.locals.releaseWriteLock = safeRelease;
+
+  // Safety nets: release on response completion or timeout
+  res.on('finish', safeRelease);
+  res.on('close', safeRelease);
+  res.on('error', safeRelease);
+
+  const timeout = setTimeout(safeRelease, LOCK_TIMEOUT_MS);
+
+  const clearSafetyTimeout = () => clearTimeout(timeout);
+  res.on('finish', clearSafetyTimeout);
+  res.on('close', clearSafetyTimeout);
+
+  try {
+    next();
+  } catch (err) {
+    safeRelease();
+    clearTimeout(timeout);
+    throw err;
+  }
 };

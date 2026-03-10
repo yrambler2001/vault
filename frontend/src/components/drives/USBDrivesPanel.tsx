@@ -55,9 +55,9 @@ export function USBDrivesPanel() {
     try {
       const result = await api.verifyDrive(label);
       showDriveMessage(
-        `Integrity: ${result.valid}/${result.total} valid` +
-          (result.corrupted.length > 0 ? `, ${result.corrupted.length} corrupted` : '') +
-          (result.noSidecar.length > 0 ? `, ${result.noSidecar.length} no checksum` : ''),
+        `Integrity: ${result.valid}/${result.total} valid${
+          result.corrupted.length > 0 ? `, ${result.corrupted.length} corrupted` : ''
+        }${result.noSidecar.length > 0 ? `, ${result.noSidecar.length} no checksum` : ''}`,
       );
     } catch {
       showDriveMessage('Verification failed');

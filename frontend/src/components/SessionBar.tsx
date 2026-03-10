@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { api } from '../lib/api';
 import { Clock, Lock } from 'lucide-react';
+import { api } from '../lib/api';
 
 interface Props {
   onSessionExpired: () => void;

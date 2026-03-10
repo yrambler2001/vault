@@ -27,24 +27,20 @@ export const isWebAuthnAvailable = async (): Promise<boolean> => {
 
 // ── PRF Helpers ──
 
-const buildPrfExtension = (saltBase64: string): { prf: { eval: { first: ArrayBuffer } } } => {
-  return {
-    prf: {
-      eval: {
-        first: fromBase64(saltBase64).buffer as ArrayBuffer,
-      },
+const buildPrfExtension = (saltBase64: string): { prf: { eval: { first: ArrayBuffer } } } => ({
+  prf: {
+    eval: {
+      first: fromBase64(saltBase64).buffer as ArrayBuffer,
     },
-  };
-};
+  },
+});
 
 const extractPrfResult = (extensions: AuthenticationExtensionsClientOutputs): ArrayBuffer | null => {
   const prf = (extensions as Record<string, unknown>)?.prf as { results?: { first?: ArrayBuffer } } | undefined;
   return prf?.results?.first || null;
 };
 
-const prfOutputToKEK = async (prfOutput: ArrayBuffer): Promise<CryptoKey> => {
-  return crypto.subtle.importKey('raw', prfOutput, ALG, false, ['encrypt', 'decrypt']);
-};
+const prfOutputToKEK = async (prfOutput: ArrayBuffer): Promise<CryptoKey> => crypto.subtle.importKey('raw', prfOutput, ALG, false, ['encrypt', 'decrypt']);
 
 // ── Registration (Vault-level — for PRF key derivation) ──
 
@@ -183,13 +179,10 @@ export const authenticateWithPRF = async (rpId: string, credentials: PrfCredenti
 
 // ── API-Level WebAuthn (standard, no PRF) ──
 
-export const registerApiCredential = async (options: PublicKeyCredentialCreationOptionsJSON): Promise<unknown> => {
-  return startRegistration({ optionsJSON: options });
-};
+export const registerApiCredential = async (options: PublicKeyCredentialCreationOptionsJSON): Promise<unknown> => startRegistration({ optionsJSON: options });
 
-export const authenticateApiCredential = async (options: PublicKeyCredentialRequestOptionsJSON): Promise<unknown> => {
-  return startAuthentication({ optionsJSON: options });
-};
+export const authenticateApiCredential = async (options: PublicKeyCredentialRequestOptionsJSON): Promise<unknown> =>
+  startAuthentication({ optionsJSON: options });
 
 // ── Utility ──
 

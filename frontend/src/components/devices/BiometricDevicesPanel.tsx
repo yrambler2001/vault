@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Fingerprint, Smartphone, Plus, X, AlertTriangle } from 'lucide-react';
+import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import * as cryptoLib from '../../lib/crypto';
 import * as webauthnLib from '../../lib/webauthn';
 import { api } from '../../lib/api';
 import type { VaultMeta, WebAuthnDevice } from '../../lib/api';
 import type { Notification } from '../NotificationBanner';
-import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 
 interface Props {
   vaultMeta: VaultMeta | null;
@@ -62,7 +62,7 @@ export function BiometricDevicesPanel({ vaultMeta, dekExtractable, webauthnAvail
       const kek = await cryptoLib.deriveKEK(masterPasswordForReg, vaultMeta.passwordSalt, vaultMeta.kdfParams);
 
       const vaultData = await api.getVaultData();
-      const masterWrappedKey = vaultData.keys['master_password'];
+      const masterWrappedKey = vaultData.keys.master_password;
       if (!masterWrappedKey) {
         throw new Error('Master password key slot not found');
       }

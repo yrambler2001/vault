@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Key, Fingerprint, Plus, X, AlertTriangle } from 'lucide-react';
+import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import * as webauthnLib from '../../lib/webauthn';
 import { api } from '../../lib/api';
 import type { ApiWebAuthnCredential } from '../../lib/api';
 import type { Notification } from '../NotificationBanner';
-import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 
 interface Props {
   webauthnAvailable: boolean;
