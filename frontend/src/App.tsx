@@ -47,6 +47,7 @@ export default function App() {
   const [vaultMeta, setVaultMeta] = useState<VaultMeta | null>(null);
   const [dekExtractable, setDekExtractable] = useState<CryptoKey | null>(null);
   const [vaultVersion, setVaultVersion] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Editing state
   const [editingEntries, setEditingEntries] = useState<VaultEntry[]>([]);
@@ -265,9 +266,13 @@ export default function App() {
   // ── Manual Save ──
 
   const handleManualSave = useCallback(async () => {
+    if (isSaving) return;
+
     const currentDek = dekRef.current;
     const currentVersion = vaultVersionRef.current;
     if (!currentDek) return;
+
+    setIsSaving(true);
 
     try {
       const payload: VaultPayload = { entries: editingEntries };
@@ -287,8 +292,10 @@ export default function App() {
       } else {
         showError(e);
       }
+    } finally {
+      setIsSaving(false);
     }
-  }, [editingEntries, showNotification, showError]);
+  }, [editingEntries, showNotification, showError, isSaving]);
 
   // ── Entry CRUD ──
 
@@ -391,8 +398,12 @@ export default function App() {
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <span className="text-xs text-gray-400">v{vaultVersion}</span>
             {isDirty && (
-              <button onClick={handleManualSave} className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700">
-                <Save size={14} /> Save
+              <button
+                onClick={handleManualSave}
+                disabled={isSaving}
+                className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Save size={14} /> {isSaving ? 'Saving...' : 'Save'}
               </button>
             )}
             {isDirty && <span className="rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">unsaved</span>}
