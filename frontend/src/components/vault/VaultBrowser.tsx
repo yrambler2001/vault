@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Key, Shield } from 'lucide-react';
+import { Plus, Key } from 'lucide-react';
 import type { VaultEntry, FolderNode } from '../../lib/types';
 import { buildFolderTree, getFolderAtPath, filterEntries } from '../../lib/folders';
 import { Breadcrumb } from '../ui/Breadcrumb';
@@ -15,15 +15,11 @@ interface Props {
   onDeleteEntry: (id: string) => void;
 }
 
-type ViewState =
-  | { type: 'browse'; path: string }
-  | { type: 'entry'; entryId: string; returnPath: string }
-  | { type: 'create'; kind: 'password' | 'totp'; returnPath: string };
+type ViewState = { type: 'browse'; path: string } | { type: 'entry'; entryId: string; returnPath: string } | { type: 'create'; returnPath: string };
 
 export function VaultBrowser({ entries, onAddEntry, onUpdateEntry, onDeleteEntry }: Props) {
   const [viewState, setViewState] = useState<ViewState>({ type: 'browse', path: '' });
   const [searchQuery, setSearchQuery] = useState('');
-  const [showCreateMenu, setShowCreateMenu] = useState(false);
 
   // Build folder tree
   const folderTree = useMemo(() => buildFolderTree(entries), [entries]);
@@ -56,9 +52,8 @@ export function VaultBrowser({ entries, onAddEntry, onUpdateEntry, onDeleteEntry
     }
   };
 
-  const handleCreateEntry = (kind: 'password' | 'totp') => {
-    setShowCreateMenu(false);
-    setViewState({ type: 'create', kind, returnPath: currentPath });
+  const handleCreateEntry = () => {
+    setViewState({ type: 'create', returnPath: currentPath });
   };
 
   const handleSaveNewEntry = (entry: VaultEntry) => {
@@ -80,7 +75,7 @@ export function VaultBrowser({ entries, onAddEntry, onUpdateEntry, onDeleteEntry
 
   // ── Render: Create Entry ──
   if (viewState.type === 'create') {
-    return <CreateEntry kind={viewState.kind} defaultFolder={viewState.returnPath} onSave={handleSaveNewEntry} onCancel={handleBack} />;
+    return <CreateEntry defaultFolder={viewState.returnPath} onSave={handleSaveNewEntry} onCancel={handleBack} />;
   }
 
   // ── Render: Browse ──
@@ -94,32 +89,12 @@ export function VaultBrowser({ entries, onAddEntry, onUpdateEntry, onDeleteEntry
       {/* Breadcrumb */}
       <div className="mb-3 flex items-center justify-between">
         <Breadcrumb currentPath={currentPath} onNavigate={handleNavigateFolder} />
-        <div className="relative">
-          <button
-            onClick={() => setShowCreateMenu(!showCreateMenu)}
-            className="flex items-center gap-1 rounded bg-green-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-green-700"
-          >
-            <Plus size={14} /> Add Entry
-          </button>
-          {showCreateMenu && (
-            <div className="absolute top-full right-0 z-10 mt-1 w-48 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
-              <button
-                onClick={() => handleCreateEntry('password')}
-                className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                <Key size={16} className="text-blue-500" />
-                <span className="text-gray-900 dark:text-gray-100">Password</span>
-              </button>
-              <button
-                onClick={() => handleCreateEntry('totp')}
-                className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                <Shield size={16} className="text-purple-500" />
-                <span className="text-gray-900 dark:text-gray-100">TOTP (2FA)</span>
-              </button>
-            </div>
-          )}
-        </div>
+        <button
+          onClick={handleCreateEntry}
+          className="flex items-center gap-1 rounded bg-green-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-green-700"
+        >
+          <Plus size={14} /> Add Entry
+        </button>
       </div>
 
       {/* Folder content */}

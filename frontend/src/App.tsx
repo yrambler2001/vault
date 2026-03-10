@@ -5,6 +5,7 @@ import * as webauthnLib from './lib/webauthn';
 import { api } from './lib/api';
 import type { VaultMeta } from './lib/api';
 import type { VaultEntry, VaultPayload } from './lib/types';
+import { LATEST_VERSION } from './lib/migrations';
 import { VaultError, ErrorCodes, friendlyMessages } from './lib/errors';
 import { AutoLockTimer } from './lib/secure-state';
 import { getStoredTheme, setStoredTheme, applyTheme } from './lib/theme';
@@ -256,7 +257,7 @@ export default function App() {
     setDekSafe(result.dek);
     setDekExtractable(result.dekExtractable);
     setEditingEntries(result.entries);
-    setIsDirty(false);
+    setIsDirty(result.migrated);
     setVaultMeta(result.vaultMeta);
     setVaultVersionSafe(result.vaultVersion);
     setAppState('unlocked');
@@ -274,7 +275,7 @@ export default function App() {
     setIsSaving(true);
 
     try {
-      const payload: VaultPayload = { entries: editingEntries };
+      const payload: VaultPayload = { version: LATEST_VERSION, entries: editingEntries };
       const encrypted = await cryptoLib.encryptPayload(payload, currentDek);
       const result = await api.updateData(encrypted, currentVersion);
       setIsDirty(false);

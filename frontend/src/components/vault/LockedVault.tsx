@@ -4,6 +4,7 @@ import * as cryptoLib from '../../lib/crypto';
 import * as webauthnLib from '../../lib/webauthn';
 import { api } from '../../lib/api';
 import { VaultError, ErrorCodes, friendlyMessages } from '../../lib/errors';
+import { runMigrations } from '../../lib/migrations';
 import { SessionBar } from '../SessionBar';
 import { NotificationBanner, Notification } from '../NotificationBanner';
 import type { VaultMeta } from '../../lib/api';
@@ -15,6 +16,8 @@ export interface UnlockResult {
   entries: VaultEntry[];
   vaultMeta: VaultMeta & { createdAt: string; updatedAt: string };
   vaultVersion: number;
+  /** True if migrations were applied and data needs saving */
+  migrated: boolean;
 }
 
 interface Props {
@@ -97,8 +100,12 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
         throw new VaultError(ErrorCodes.VAULT_CORRUPTED, friendlyMessages.VAULT_CORRUPTED);
       }
 
-      const payload = decryptedRaw as VaultPayload;
-      const entries = Array.isArray(payload?.entries) ? payload.entries : [];
+      // Run migrations on the decrypted payload
+      const legacyPayload = decryptedRaw as unknown;
+      const { migrated, payload: migratedPayload } = runMigrations(legacyPayload);
+
+      const payload = migratedPayload as VaultPayload;
+      const entries = Array.isArray(payload?.entries) ? (payload.entries as VaultEntry[]) : [];
 
       setMasterPasswordInput('');
 
@@ -108,9 +115,14 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
         entries,
         vaultMeta: vaultData.meta,
         vaultVersion: vaultData.meta.version,
+        migrated,
       });
 
-      showNotification('success', method === 'biometric' ? 'Vault unlocked with biometrics.' : 'Vault unlocked.');
+      if (migrated) {
+        showNotification('warning', 'Vault data was migrated to the latest format. Please save to persist the changes.');
+      } else {
+        showNotification('success', method === 'biometric' ? 'Vault unlocked with biometrics.' : 'Vault unlocked.');
+      }
     } catch (e) {
       showError(e);
     } finally {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Lock } from 'lucide-react';
 import * as cryptoLib from '../../lib/crypto';
 import { api } from '../../lib/api';
+import { LATEST_VERSION } from '../../lib/migrations';
 import { VaultError, ErrorCodes, friendlyMessages } from '../../lib/errors';
 import { SessionBar } from '../SessionBar';
 import { NotificationBanner, Notification } from '../NotificationBanner';
@@ -38,7 +39,7 @@ export function SetupVault({ onComplete, onLogout, showNotification, showError, 
 
       const newDek = await cryptoLib.generateDEKSimple();
       const wrappedDEK = await cryptoLib.wrapDEK(newDek, kek);
-      const initialData = await cryptoLib.encryptPayload({ entries: [] }, newDek);
+      const initialData = await cryptoLib.encryptPayload({ version: LATEST_VERSION, entries: [] }, newDek);
 
       const payload = {
         meta: {

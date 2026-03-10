@@ -96,15 +96,10 @@ export function filterEntries(entries: VaultEntry[], query: string): VaultEntry[
 
     // Search searchable fields
     for (const field of entry.fields) {
-      if (field.searchable) {
+      if (field.searchable && field.type !== 'totp') {
         const val = entry.values[field.id] || '';
         if (val.toLowerCase().includes(q)) return true;
       }
-    }
-
-    // For TOTP, search issuer/account in values
-    if (entry.kind === 'totp' && entry.totp) {
-      // already covered by searchable fields
     }
 
     return false;
