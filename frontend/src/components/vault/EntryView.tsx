@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Copy, CheckCircle, Eye, Pencil, Trash2, Clock, Save, X } from 'lucide-react';
+import { ArrowLeft, Copy, CheckCircle, Eye, Pencil, Trash2, Clock, Save, X, ExternalLink } from 'lucide-react';
 import type { VaultEntry, FieldDefinition } from '../../lib/types';
 import * as totpLib from '../../lib/totp';
 
@@ -230,7 +230,9 @@ function FieldDisplay({ value, hidden }: { value: string; hidden: boolean }) {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const displayValue = hidden && !revealed ? '••••••••' : value;
+  const displayValue = hidden && value && !revealed ? '••••••••' : value;
+
+  const isLink = value.toLowerCase().startsWith('http://') || value.toLowerCase().startsWith('https://');
 
   const handleCopy = async () => {
     try {
@@ -256,6 +258,17 @@ function FieldDisplay({ value, hidden }: { value: string; hidden: boolean }) {
         {displayValue || <span className="text-gray-400 italic">—</span>}
       </div>
       <div className="flex shrink-0 gap-1">
+        {isLink && (
+          <a
+            href={value}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center rounded p-1.5 text-gray-400 transition-colors hover:text-blue-600 dark:hover:text-blue-400"
+            title="Open link in new tab"
+          >
+            <ExternalLink size={16} />
+          </a>
+        )}
         {hidden && (
           <button
             onClick={handleReveal}
