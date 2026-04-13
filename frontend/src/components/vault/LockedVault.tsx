@@ -39,14 +39,7 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
 
   const checkBiometricDevices = useCallback(async () => {
     if (isOfflineMode) {
-      // In offline mode, we can still attempt biometric unlock if there are
-      // PRF key slots other than master_password in the uploaded vault data.
-      if (offlineVaultData) {
-        const prfSlots = Object.keys(offlineVaultData.keys).filter((k) => k !== 'master_password');
-        setHasBiometrics(prfSlots.length > 0);
-      } else {
-        setHasBiometrics(false);
-      }
+      setHasBiometrics(false);
       return;
     }
 
@@ -56,7 +49,7 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
     } catch {
       setHasBiometrics(false);
     }
-  }, [isOfflineMode, offlineVaultData]);
+  }, [isOfflineMode]);
 
   useEffect(() => {
     checkBiometricDevices();
@@ -84,16 +77,6 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
       if (method === 'password') {
         kek = await cryptoLib.deriveKEK(masterPasswordInput, vaultData.meta.passwordSalt, vaultData.meta.kdfParams);
         slotId = 'master_password';
-      } else if (isOfflineMode) {
-        // In offline mode, use the vault meta to build PRF credential hints.
-        // We don't have server-side auth options, so we need the user's
-        // browser to already have the credential registered on this origin.
-        // We use the rpId from the current hostname and build credential
-        // hints from the key slots in the vault data.
-        const authOptions = await api.getWebAuthnAuthOptions();
-        const result = await webauthnLib.authenticateWithPRF(authOptions.rpId, authOptions.credentials);
-        kek = result.kek;
-        slotId = result.slotId;
       } else {
         const authOptions = await api.getWebAuthnAuthOptions();
         const result = await webauthnLib.authenticateWithPRF(authOptions.rpId, authOptions.credentials);
