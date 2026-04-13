@@ -4,9 +4,9 @@ const ALG = { name: 'AES-GCM', length: 256 } as const;
 
 // ── Helpers ──
 
-export const toBase64 = (buf: ArrayBuffer | Uint8Array): string => btoa(String.fromCharCode(...new Uint8Array(buf)));
+export const toBase64 = (buf: ArrayBuffer | Uint8Array): string => new Uint8Array(buf).toBase64();
 
-export const fromBase64 = (b64: string): Uint8Array => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+export const fromBase64 = (b64: string): Uint8Array => Uint8Array.fromBase64(b64);
 
 export const toHex = (buf: ArrayBuffer): string =>
   Array.from(new Uint8Array(buf))
