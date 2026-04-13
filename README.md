@@ -236,3 +236,106 @@ ALL active sessions.** Users must re-authenticate after a restart. This is
 **by design** — it ensures no stale session data persists on disk, reduces
 attack surface, and the HMAC secret regeneration on restart automatically
 invalidates any stolen session tokens.
+
+## 🔧 Developer Mode
+
+A built-in Developer Mode toggle allows you to programmatically query **and modify** your decrypted vault data directly from Chrome DevTools. This is designed for the use case where you need ad-hoc analysis or batch operations on your vault contents.
+
+**How it works:** When activated via the toggle in the vault view, a deep clone of all decrypted entries is attached to `window.$vault`. You can inspect, filter, and mutate entries, then call `$vault.commit()` to push changes back into the live vault state. The UI will show "unsaved" — you must click Save to persist to the server. When deactivated (or after a 15-minute timeout), the variable is deleted and the reference is nulled.
+
+**Read-only queries (in Chrome DevTools console):**
+
+```js
+// Find entries with duplicated passwords
+$vault.findDuplicatePasswords();
+
+// Find entries with empty password fields
+$vault.findEmptyPasswords();
+
+// Find passwords shorter than 16 characters
+$vault.findWeakPasswords(16);
+
+// List all TOTP entries
+$vault.listTOTP();
+
+// Search entries by regex
+$vault.search(/qwerty/i);
+
+// Get vault statistics
+$vault.summary();
+
+// Raw access — full array of entry objects
+$vault.entries;
+```
+
+**Batch modifications:**
+
+```js
+// Rename a folder across all entries
+$vault.update(
+  (e) => e.folders.includes("Old Folder"),
+  (e) => {
+    e.folders = e.folders.map((f) => (f === "Old Folder" ? "New Folder" : f));
+  },
+);
+
+// Move all entries from one folder to another
+$vault.update(
+  (e) => e.folders.some((f) => f.startsWith("Legacy/")),
+  (e) => {
+    e.folders = e.folders.map((f) => f.replace(/^Legacy\//, "Archive/Legacy/"));
+  },
+);
+
+// Add a new entry programmatically
+$vault.add([
+  {
+    name: "New Service",
+    folders: ["Home/Cloud"],
+    fields: [
+      {
+        id: crypto.randomUUID(),
+        name: "Login",
+        type: "single",
+        searchable: true,
+        hidden: false,
+      },
+      {
+        id: crypto.randomUUID(),
+        name: "Password",
+        type: "single",
+        searchable: false,
+        hidden: true,
+      },
+    ],
+    values: {}, // fill in field values keyed by the IDs above
+  },
+]);
+
+// Remove entries matching a condition
+$vault.remove((e) => e.name.includes("test"));
+
+// Manual mutation workflow
+$vault.entries[0].name = "Renamed Entry";
+$vault.preview(); // see what changed without committing
+$vault.commit(); // push to vault state
+
+// Discard all local changes and re-sync from live vault
+$vault.refresh();
+```
+
+**Data flow:**
+
+1. **Activate** → deep clone of entries is attached to `window.$vault`
+2. **Mutate** → modify `$vault.entries` in-place or use helper methods
+3. **Commit** → `$vault.commit()` or `$vault.update()` pushes changes into React state
+4. **Save** → click "Save" button in the UI to encrypt and persist to server
+5. **Deactivate** → `window.$vault` is deleted, references nulled
+
+**Security notes:**
+
+- The snapshot is a **deep clone** — accidental mutations do not affect the real vault until `commit()` is called.
+- `commit()` only updates in-memory React state. Data is not sent to the server until you click Save.
+- The variable is automatically deleted after 15 minutes, on vault lock, or on logout.
+- A confirmation dialog warns about the security implications before activation.
+- This is subject to the same JavaScript memory limitations documented below.

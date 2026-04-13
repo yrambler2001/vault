@@ -9,6 +9,7 @@ import { LATEST_VERSION } from './lib/migrations';
 import { VaultError, ErrorCodes, friendlyMessages } from './lib/errors';
 import { AutoLockTimer } from './lib/secure-state';
 import { getStoredTheme, setStoredTheme, applyTheme } from './lib/theme';
+import { deactivateDevMode } from './lib/dev-vault';
 import type { Theme } from './lib/theme';
 import { Notification, NotificationBanner } from './components/NotificationBanner';
 import { SessionBar } from './components/SessionBar';
@@ -20,6 +21,7 @@ import { SetupVault } from './components/vault/SetupVault';
 import { LockedVault } from './components/vault/LockedVault';
 import type { UnlockResult } from './components/vault/LockedVault';
 import { VaultBrowser } from './components/vault/VaultBrowser';
+import { DevModeToggle } from './components/vault/DevModeToggle';
 import { BiometricDevicesPanel } from './components/devices/BiometricDevicesPanel';
 import { ApiWebAuthnPanel } from './components/devices/ApiWebAuthnPanel';
 import { USBDrivesPanel } from './components/drives/USBDrivesPanel';
@@ -130,6 +132,7 @@ export default function App() {
       api.logout().catch(() => {});
       api.clearCsrfToken();
     }
+    deactivateDevMode();
     setDekSafe(null);
     setDekExtractable(null);
     setEditingEntries([]);
@@ -149,6 +152,7 @@ export default function App() {
   // ── Vault lock ──
 
   const handleVaultLock = useCallback(() => {
+    deactivateDevMode();
     setDekSafe(null);
     setDekExtractable(null);
     setEditingEntries([]);
@@ -280,7 +284,6 @@ export default function App() {
     try {
       const vaultData = await api.getVaultData();
 
-      // Reconstruct the exact VaultDocument shape (strip keySlots)
       const vaultDocument = {
         meta: vaultData.meta,
         keys: vaultData.keys,
@@ -359,6 +362,13 @@ export default function App() {
 
   const handleDeleteEntry = useCallback((id: string) => {
     setEditingEntries((prev) => prev.filter((e) => e.id !== id));
+    setIsDirty(true);
+  }, []);
+
+  // ── Developer Mode commit handler ──
+
+  const handleDevModeCommit = useCallback((entries: VaultEntry[]) => {
+    setEditingEntries(entries);
     setIsDirty(true);
   }, []);
 
@@ -459,7 +469,6 @@ export default function App() {
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <span className="text-xs text-gray-400">v{vaultVersion}</span>
 
-            {/* Download button (online mode only) */}
             {!isOfflineMode && (
               <button
                 onClick={handleDownloadVault}
@@ -470,7 +479,6 @@ export default function App() {
               </button>
             )}
 
-            {/* Save button */}
             {!isOfflineMode && isDirty && (
               <button
                 onClick={handleManualSave}
@@ -481,7 +489,6 @@ export default function App() {
               </button>
             )}
 
-            {/* Offline save disabled indicator */}
             {isOfflineMode && isDirty && (
               <span
                 className="flex items-center gap-1 rounded bg-gray-200 px-3 py-1 text-sm text-gray-400 dark:bg-gray-700 dark:text-gray-500"
@@ -513,6 +520,9 @@ export default function App() {
 
         {/* Password Generator */}
         <PasswordGenerator />
+
+        {/* Developer Mode Toggle */}
+        <DevModeToggle entries={editingEntries} vaultVersion={vaultVersion} onDevModeCommit={handleDevModeCommit} />
 
         {/* Tab Navigation */}
         <div className="mb-4 flex overflow-x-auto border-b border-gray-200 dark:border-gray-700">
