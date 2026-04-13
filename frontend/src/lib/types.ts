@@ -120,6 +120,7 @@ export type DevModeRefreshCallback = () => VaultEntry[];
 declare global {
   interface Window {
     $vault?: DevVaultHandle;
+    $DEV?: boolean;
   }
 }
 

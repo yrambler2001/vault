@@ -241,7 +241,7 @@ invalidates any stolen session tokens.
 
 A built-in Developer Mode toggle allows you to programmatically query **and modify** your decrypted vault data directly from Chrome DevTools. This is designed for the use case where you need ad-hoc analysis or batch operations on your vault contents.
 
-**How it works:** When activated via the toggle in the vault view, a deep clone of all decrypted entries is attached to `window.$vault`. You can inspect, filter, and mutate entries, then call `$vault.commit()` to push changes back into the live vault state. The UI will show "unsaved" — you must click Save to persist to the server. When deactivated (or after a 15-minute timeout), the variable is deleted and the reference is nulled.
+**How it works:** When activated via `window.$DEV = true` and the toggle in the vault view, a deep clone of all decrypted entries is attached to `window.$vault`. You can inspect, filter, and mutate entries, then call `$vault.commit()` to push changes back into the live vault state. The UI will show "unsaved" — you must click Save to persist to the server. When deactivated (or after a 15-minute timeout), the variable is deleted and the reference is nulled.
 
 **Read-only queries (in Chrome DevTools console):**
 

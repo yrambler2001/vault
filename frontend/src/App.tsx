@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Unlock, Save, Download, WifiOff } from 'lucide-react';
+import { Unlock, Save, Download, WifiOff, BotMessageSquare, CheckCircle } from 'lucide-react';
 import * as cryptoLib from './lib/crypto';
 import * as webauthnLib from './lib/webauthn';
 import { api } from './lib/api';
@@ -58,6 +58,9 @@ export default function App() {
 
   // WebAuthn state
   const [webauthnAvailable, setWebauthnAvailable] = useState(false);
+
+  // Copy prompt state
+  const [promptCopied, setPromptCopied] = useState(false);
 
   // Offline mode state
   const [isOfflineMode, setIsOfflineMode] = useState(false);
@@ -314,6 +317,44 @@ export default function App() {
     }
   }, [showNotification, showError]);
 
+  // ── Copy Prompt for AI ──
+
+  const handleCopyPromptForAI = useCallback(async () => {
+    if (editingEntries.length === 0) {
+      showNotification('info', 'No entries to copy.');
+      return;
+    }
+
+    const lines = editingEntries.map((entry) => {
+      const locations = entry.folders.map((f) => f || '(root)').join(', ');
+      return `- ${entry.name} [${locations}]`;
+    });
+
+    const prompt = [
+      'This is data from a password manager vault. The format below lists entry names and their locations (folders).',
+      'Each entry has a name and one or more folder locations. Folders are hierarchical paths separated by "/" (e.g. "Work/Cloud"). An entry can appear in multiple folders. "(root)" means the entry is at the top level with no folder.',
+      '',
+      'You can use this data to answer questions like:',
+      '- "Where is the password for X?" — find which folder(s) contain an entry',
+      '- "Where should I put a new password for X?" — suggest an appropriate folder based on existing organization',
+      '- "How is my vault organized?" — summarize the folder structure',
+      '- "Are there any duplicates or entries that could be reorganized?"',
+      '',
+      `Total entries: ${editingEntries.length}`,
+      '',
+      '--- ENTRIES (name [locations]) ---',
+      ...lines,
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    } catch {
+      showNotification('error', 'Failed to copy to clipboard.');
+    }
+  }, [editingEntries, showNotification]);
+
   // ── Manual Save ──
 
   const handleManualSave = useCallback(async () => {
@@ -466,6 +507,16 @@ export default function App() {
             )}
           </h1>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleCopyPromptForAI}
+              className={`rounded-lg p-2 transition-colors ${
+                promptCopied ? 'text-green-500' : 'text-gray-500 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-700'
+              }`}
+              title={promptCopied ? 'Copied!' : 'Copy prompt for AI (entry names & locations)'}
+              aria-label="Copy prompt for AI"
+            >
+              {promptCopied ? <CheckCircle size={18} /> : <BotMessageSquare size={18} />}
+            </button>
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <span className="text-xs text-gray-400">v{vaultVersion}</span>
 
@@ -522,7 +573,7 @@ export default function App() {
         <PasswordGenerator />
 
         {/* Developer Mode Toggle */}
-        <DevModeToggle entries={editingEntries} vaultVersion={vaultVersion} onDevModeCommit={handleDevModeCommit} />
+        {window.$DEV && <DevModeToggle entries={editingEntries} vaultVersion={vaultVersion} onDevModeCommit={handleDevModeCommit} />}
 
         {/* Tab Navigation */}
         <div className="mb-4 flex overflow-x-auto border-b border-gray-200 dark:border-gray-700">
