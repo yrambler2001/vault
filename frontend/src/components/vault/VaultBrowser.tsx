@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Plus, Key } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import type { VaultEntry, FolderNode } from '../../lib/types';
+import { getPrimaryFolder } from '../../lib/types';
 import { buildFolderTree, getFolderAtPath, filterEntries } from '../../lib/folders';
 import { Breadcrumb } from '../ui/Breadcrumb';
 import { SearchBar } from '../ui/SearchBar';
@@ -65,9 +66,9 @@ export function VaultBrowser({ entries, onAddEntry, onUpdateEntry, onDeleteEntry
   if (viewState.type === 'entry' && selectedEntry) {
     return (
       <div>
-        <Breadcrumb currentPath={selectedEntry.folder || ''} onNavigate={(path) => setViewState({ type: 'browse', path })} />
+        <Breadcrumb currentPath={getPrimaryFolder(selectedEntry)} onNavigate={(path) => setViewState({ type: 'browse', path })} />
         <div className="mt-3">
-          <EntryView entry={selectedEntry} onBack={handleBack} onUpdate={onUpdateEntry} onDelete={onDeleteEntry} />
+          <EntryView entry={selectedEntry} onBack={handleBack} onUpdate={onUpdateEntry} onDelete={onDeleteEntry} onNavigateFolder={handleNavigateFolder} />
         </div>
       </div>
     );

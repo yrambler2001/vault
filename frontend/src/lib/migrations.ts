@@ -14,7 +14,7 @@
 import type { TOTPFieldValue, VaultPayload } from './types';
 
 /** The latest schema version. Bump this when adding a new migration. */
-export const LATEST_VERSION = 2;
+export const LATEST_VERSION = 3;
 
 export interface Migration {
   /** The version this migration produces */
@@ -73,8 +73,35 @@ const migrateTotpToPassword: Migration = {
   },
 };
 
+/**
+ * Migration 2 → 3: Convert single `folder` string to `folders` array.
+ *
+ * - `entry.folder` (string) is converted to `entry.folders` (string[])
+ * - If `folder` was empty string or missing, `folders` becomes `[""]` (root)
+ * - If `folder` had a value, `folders` becomes `[folder]`
+ * - The old `folder` property is removed
+ */
+const migrateFolderToFolders: Migration = {
+  toVersion: 3,
+  description: 'Convert single folder field to multiple folders array',
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  migrate: (payload: any) => {
+    for (const entry of payload.entries) {
+      // Only migrate if the entry still has the old `folder` property
+      // and does not yet have `folders`
+      if (!Array.isArray(entry.folders)) {
+        const oldFolder: string = (entry.folder ?? '').trim();
+        entry.folders = oldFolder ? [oldFolder] : [''];
+        delete entry.folder;
+      }
+    }
+
+    payload.version = 3;
+  },
+};
+
 /** All migrations in order */
-const migrations: Migration[] = [migrateTotpToPassword];
+const migrations: Migration[] = [migrateTotpToPassword, migrateFolderToFolders];
 
 /**
  * Run all necessary migrations on a vault payload.

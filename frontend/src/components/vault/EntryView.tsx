@@ -9,28 +9,35 @@ interface Props {
   onBack: () => void;
   onUpdate: (id: string, changes: Partial<VaultEntry>) => void;
   onDelete: (id: string) => void;
+  onNavigateFolder: (path: string) => void;
 }
 
-export function EntryView({ entry, onBack, onUpdate, onDelete }: Props) {
+export function EntryView({ entry, onBack, onUpdate, onDelete, onNavigateFolder }: Props) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(entry.name);
-  const [editFolder, setEditFolder] = useState(entry.folder);
+  const [editFolders, setEditFolders] = useState<string[]>([...entry.folders]);
   const [editFields, setEditFields] = useState<FieldDefinition[]>([...entry.fields]);
   const [editValues, setEditValues] = useState<Record<string, string>>({ ...entry.values });
 
   // Reset edit state when entry changes
   useEffect(() => {
     setEditName(entry.name);
-    setEditFolder(entry.folder);
+    setEditFolders([...entry.folders]);
     setEditFields([...entry.fields]);
     setEditValues({ ...entry.values });
     setEditing(false);
-  }, [entry.id, entry.name, entry.folder, entry.fields, entry.values]);
+  }, [entry.id, entry.name, entry.folders, entry.fields, entry.values]);
 
   const handleSave = () => {
+    // Normalize folders: trim, deduplicate, keep at least one
+    const normalizedFolders = [...new Set(editFolders.map((f) => f.trim()))];
+    if (normalizedFolders.length === 0) {
+      normalizedFolders.push('');
+    }
+
     onUpdate(entry.id, {
       name: editName,
-      folder: editFolder,
+      folders: normalizedFolders,
       fields: editFields,
       values: editValues,
     });
@@ -39,7 +46,7 @@ export function EntryView({ entry, onBack, onUpdate, onDelete }: Props) {
 
   const handleCancel = () => {
     setEditName(entry.name);
-    setEditFolder(entry.folder);
+    setEditFolders([...entry.folders]);
     setEditFields([...entry.fields]);
     setEditValues({ ...entry.values });
     setEditing(false);
@@ -73,6 +80,21 @@ export function EntryView({ entry, onBack, onUpdate, onDelete }: Props) {
 
   const handleUpdateFieldDef = (fieldId: string, changes: Partial<FieldDefinition>) => {
     setEditFields(editFields.map((f) => (f.id === fieldId ? { ...f, ...changes } : f)));
+  };
+
+  const handleAddFolder = () => {
+    setEditFolders([...editFolders, '']);
+  };
+
+  const handleUpdateFolder = (index: number, value: string) => {
+    const updated = [...editFolders];
+    updated[index] = value;
+    setEditFolders(updated);
+  };
+
+  const handleRemoveFolder = (index: number) => {
+    if (editFolders.length <= 1) return;
+    setEditFolders(editFolders.filter((_, i) => i !== index));
   };
 
   return (
@@ -121,19 +143,57 @@ export function EntryView({ entry, onBack, onUpdate, onDelete }: Props) {
           )}
         </div>
 
-        {/* Folder */}
+        {/* Folders */}
         <div className="mb-4">
-          <label className="mb-1 block text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">Folder</label>
+          <label className="mb-1 block text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">Folders</label>
           {editing ? (
-            <input
-              type="text"
-              value={editFolder}
-              onChange={(e) => setEditFolder(e.target.value)}
-              placeholder="e.g. Work/Cloud"
-              className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-            />
+            <div>
+              <div className="space-y-2">
+                {editFolders.map((folder, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={folder}
+                      onChange={(e) => handleUpdateFolder(index, e.target.value)}
+                      placeholder="e.g. Work/Cloud"
+                      className="flex-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                    />
+                    {editFolders.length > 1 && (
+                      <button onClick={() => handleRemoveFolder(index)} className="rounded p-1.5 text-red-400 hover:text-red-600" title="Remove folder">
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={handleAddFolder}
+                className="mt-2 flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                <Plus size={14} /> Add another folder
+              </button>
+            </div>
           ) : (
-            <div className="text-sm text-gray-900 dark:text-gray-100">{entry.folder || <span className="text-gray-400 italic">(root)</span>}</div>
+            <div className="flex flex-wrap gap-2">
+              {entry.folders.filter((f) => f).length === 0 ? (
+                <button
+                  onClick={() => onNavigateFolder('')}
+                  className="rounded bg-gray-100 px-2 py-1 text-sm text-gray-500 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
+                >
+                  <span className="italic">(root)</span>
+                </button>
+              ) : (
+                entry.folders.map((folder, index) => (
+                  <button
+                    key={index}
+                    onClick={() => onNavigateFolder(folder || '')}
+                    className="rounded bg-blue-50 px-2 py-1 text-sm text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                  >
+                    {folder || <span className="text-blue-400 italic dark:text-blue-500">(root)</span>}
+                  </button>
+                ))
+              )}
+            </div>
           )}
         </div>
 

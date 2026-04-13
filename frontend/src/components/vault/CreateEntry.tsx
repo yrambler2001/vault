@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Plus, Save } from 'lucide-react';
+import { ArrowLeft, Plus, Save, X } from 'lucide-react';
 import type { VaultEntry, FieldDefinition } from '../../lib/types';
 import { EditableField } from './FieldComponents';
 
@@ -11,7 +11,7 @@ interface Props {
 
 export function CreateEntry({ defaultFolder, onSave, onCancel }: Props) {
   const [name, setName] = useState('');
-  const [folder, setFolder] = useState(defaultFolder);
+  const [folders, setFolders] = useState<string[]>([defaultFolder]);
   const [initialState] = useState(() => {
     const loginFieldId = crypto.randomUUID();
     const passwordFieldId = crypto.randomUUID();
@@ -76,17 +76,38 @@ export function CreateEntry({ defaultFolder, onSave, onCancel }: Props) {
     setFields(fields.map((f) => (f.id === fieldId ? { ...f, ...changes } : f)));
   };
 
+  const handleAddFolder = () => {
+    setFolders([...folders, '']);
+  };
+
+  const handleUpdateFolder = (index: number, value: string) => {
+    const updated = [...folders];
+    updated[index] = value;
+    setFolders(updated);
+  };
+
+  const handleRemoveFolder = (index: number) => {
+    if (folders.length <= 1) return; // Keep at least one folder
+    setFolders(folders.filter((_, i) => i !== index));
+  };
+
   const handleSave = () => {
     if (!name.trim()) {
       setError('Name is required.');
       return;
     }
 
+    // Normalize folders: trim, deduplicate, keep at least one entry
+    const normalizedFolders = [...new Set(folders.map((f) => f.trim()))];
+    if (normalizedFolders.length === 0) {
+      normalizedFolders.push('');
+    }
+
     const entry: VaultEntry = {
       id: crypto.randomUUID(),
       kind: 'password',
       name: name.trim(),
-      folder: folder.trim(),
+      folders: normalizedFolders,
       fields,
       values,
       createdAt: new Date().toISOString(),
@@ -129,16 +150,33 @@ export function CreateEntry({ defaultFolder, onSave, onCancel }: Props) {
           />
         </div>
 
-        {/* Folder */}
+        {/* Folders */}
         <div className="mb-4">
-          <label className="mb-1 block text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">Folder</label>
-          <input
-            type="text"
-            value={folder}
-            onChange={(e) => setFolder(e.target.value)}
-            placeholder="e.g. Work/Cloud (optional)"
-            className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-          />
+          <label className="mb-1 block text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">Folders</label>
+          <div className="space-y-2">
+            {folders.map((folder, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={folder}
+                  onChange={(e) => handleUpdateFolder(index, e.target.value)}
+                  placeholder="e.g. Work/Cloud (optional)"
+                  className="flex-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                />
+                {folders.length > 1 && (
+                  <button onClick={() => handleRemoveFolder(index)} className="rounded p-1.5 text-red-400 hover:text-red-600" title="Remove folder">
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={handleAddFolder}
+            className="mt-2 flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          >
+            <Plus size={14} /> Add another folder
+          </button>
         </div>
 
         {/* Dynamic Fields */}

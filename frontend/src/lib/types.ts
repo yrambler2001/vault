@@ -34,8 +34,8 @@ export interface VaultEntry {
   kind: 'password';
   /** Display name (always present, always searchable) */
   name: string;
-  /** Folder path, e.g. "Work/AWS" or "" for root */
-  folder: string;
+  /** Folder paths where this entry appears, e.g. ["Work/AWS", "Cloud"] or [""] for root only */
+  folders: string[];
   /** Dynamic fields */
   fields: FieldDefinition[];
   /** Field values keyed by field id. For 'totp' fields, value is JSON-stringified TOTPFieldValue */
@@ -72,4 +72,11 @@ export function entryHasTOTP(entry: VaultEntry): boolean {
  */
 export function getEntryTypeLabel(entry: VaultEntry): string {
   return entryHasTOTP(entry) ? 'Password + TOTP' : 'Password';
+}
+
+/**
+ * Get the primary folder (first in the list) for navigation purposes.
+ */
+export function getPrimaryFolder(entry: VaultEntry): string {
+  return entry.folders.length > 0 ? entry.folders[0] : '';
 }

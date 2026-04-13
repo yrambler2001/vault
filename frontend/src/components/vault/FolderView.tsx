@@ -40,9 +40,10 @@ export function FolderView({ folder, onNavigateFolder, onSelectEntry }: Props) {
       {/* Entries */}
       {folder.entries.map((entry) => {
         const hasTOTP = entryHasTOTP(entry);
+        const otherFolders = entry.folders.filter((f) => f !== folder.path);
         return (
           <button
-            key={entry.id}
+            key={`${entry.id}-${folder.path}`}
             onClick={() => onSelectEntry(entry)}
             className="flex w-full items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:active:bg-gray-600"
           >
@@ -56,6 +57,11 @@ export function FolderView({ folder, onNavigateFolder, onSelectEntry }: Props) {
                     · {entry.fields.length} field{entry.fields.length !== 1 ? 's' : ''}
                   </span>
                 )}
+                {otherFolders.length > 0 && (
+                  <span className="text-blue-500 dark:text-blue-400">
+                    · +{otherFolders.length} other folder{otherFolders.length !== 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
             </div>
             <FileText size={16} className="shrink-0 text-gray-300 dark:text-gray-600" />
@@ -67,9 +73,17 @@ export function FolderView({ folder, onNavigateFolder, onSelectEntry }: Props) {
 }
 
 function countEntries(node: FolderNode): number {
-  let count = node.entries.length;
-  for (const child of node.children) {
-    count += countEntries(child);
+  // Count unique entries by ID to avoid counting the same entry multiple times
+  const ids = new Set<string>();
+  collectEntryIds(node, ids);
+  return ids.size;
+}
+
+function collectEntryIds(node: FolderNode, ids: Set<string>): void {
+  for (const entry of node.entries) {
+    ids.add(entry.id);
   }
-  return count;
+  for (const child of node.children) {
+    collectEntryIds(child, ids);
+  }
 }

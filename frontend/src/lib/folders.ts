@@ -2,6 +2,8 @@ import type { VaultEntry, FolderNode } from './types';
 
 /**
  * Build a folder tree from a flat list of entries.
+ * Entries with multiple folders will appear in each folder location.
+ * The entry object is NOT duplicated — the same reference appears in multiple nodes.
  */
 export function buildFolderTree(entries: VaultEntry[]): FolderNode {
   const root: FolderNode = {
@@ -12,27 +14,31 @@ export function buildFolderTree(entries: VaultEntry[]): FolderNode {
   };
 
   for (const entry of entries) {
-    const folder = (entry.folder || '').trim();
-    if (!folder) {
-      root.entries.push(entry);
-      continue;
-    }
+    const folders = entry.folders.length > 0 ? entry.folders : [''];
 
-    const parts = folder.split('/').filter(Boolean);
-    let current = root;
-
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      const path = parts.slice(0, i + 1).join('/');
-      let child = current.children.find((c) => c.name === part);
-      if (!child) {
-        child = { name: part, path, children: [], entries: [] };
-        current.children.push(child);
+    for (const folder of folders) {
+      const trimmed = (folder || '').trim();
+      if (!trimmed) {
+        root.entries.push(entry);
+        continue;
       }
-      current = child;
-    }
 
-    current.entries.push(entry);
+      const parts = trimmed.split('/').filter(Boolean);
+      let current = root;
+
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const path = parts.slice(0, i + 1).join('/');
+        let child = current.children.find((c) => c.name === part);
+        if (!child) {
+          child = { name: part, path, children: [], entries: [] };
+          current.children.push(child);
+        }
+        current = child;
+      }
+
+      current.entries.push(entry);
+    }
   }
 
   // Sort children alphabetically at each level
@@ -91,8 +97,10 @@ export function filterEntries(entries: VaultEntry[], query: string): VaultEntry[
     // Always search name
     if (entry.name.toLowerCase().includes(q)) return true;
 
-    // Search folder
-    if (entry.folder.toLowerCase().includes(q)) return true;
+    // Search all folders
+    for (const folder of entry.folders) {
+      if (folder.toLowerCase().includes(q)) return true;
+    }
 
     // Search searchable fields
     for (const field of entry.fields) {
@@ -112,10 +120,12 @@ export function filterEntries(entries: VaultEntry[], query: string): VaultEntry[
 export function getAllFolderPaths(entries: VaultEntry[]): string[] {
   const paths = new Set<string>();
   for (const entry of entries) {
-    if (entry.folder) {
-      const parts = entry.folder.split('/').filter(Boolean);
-      for (let i = 1; i <= parts.length; i++) {
-        paths.add(parts.slice(0, i).join('/'));
+    for (const folder of entry.folders) {
+      if (folder) {
+        const parts = folder.split('/').filter(Boolean);
+        for (let i = 1; i <= parts.length; i++) {
+          paths.add(parts.slice(0, i).join('/'));
+        }
       }
     }
   }
