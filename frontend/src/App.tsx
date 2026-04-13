@@ -497,7 +497,7 @@ export default function App() {
       <NotificationBanner notification={notification} onDismiss={dismissNotification} />
       <div className="mx-auto min-h-screen max-w-3xl bg-gray-50 px-4 pt-10 pb-8 dark:bg-gray-900">
         {/* Header */}
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-100">
             <Unlock className="text-green-600" /> Secure Vault
             {isOfflineMode && (
@@ -506,7 +506,7 @@ export default function App() {
               </span>
             )}
           </h1>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleCopyPromptForAI}
               className={`rounded-lg p-2 transition-colors ${
