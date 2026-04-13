@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Clock, Lock } from 'lucide-react';
+import { Clock, Lock, WifiOff } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface Props {
   onSessionExpired: () => void;
   autoLockMs?: number;
-  lastActiveRef?: React.MutableRefObject<number>; // NEW: Accept the ref from App.tsx
+  lastActiveRef?: React.MutableRefObject<number>;
+  isOfflineMode?: boolean;
 }
 
-export function SessionBar({ onSessionExpired, autoLockMs, lastActiveRef }: Props) {
+export function SessionBar({ onSessionExpired, autoLockMs, lastActiveRef, isOfflineMode }: Props) {
   const [localExpiresAt, setLocalExpiresAt] = useState<number>(0);
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [vaultTimeLeft, setVaultTimeLeft] = useState<string>('');
@@ -16,19 +17,18 @@ export function SessionBar({ onSessionExpired, autoLockMs, lastActiveRef }: Prop
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchSessionInfo = useCallback(async () => {
+    if (isOfflineMode) return;
     try {
       const info = await api.getSession();
       if (!info.valid) {
         onSessionExpired();
         return;
       }
-      // Use server's remainingMs to compute local expiration time,
-      // avoiding client/server clock skew issues
       setLocalExpiresAt(Date.now() + info.remainingMs);
     } catch {
       onSessionExpired();
     }
-  }, [onSessionExpired]);
+  }, [onSessionExpired, isOfflineMode]);
 
   useEffect(() => {
     fetchSessionInfo();
@@ -36,8 +36,8 @@ export function SessionBar({ onSessionExpired, autoLockMs, lastActiveRef }: Prop
 
   useEffect(() => {
     const update = () => {
-      // 1. Session Logic
-      if (localExpiresAt) {
+      // 1. Session Logic (skip in offline mode)
+      if (!isOfflineMode && localExpiresAt) {
         const remaining = localExpiresAt - Date.now();
         if (remaining <= 0) {
           setTimeLeft('Expired');
@@ -49,7 +49,7 @@ export function SessionBar({ onSessionExpired, autoLockMs, lastActiveRef }: Prop
         setTimeLeft(`${mins}:${secs.toString().padStart(2, '0')}`);
       }
 
-      // 2. Vault Auto-lock Logic (Reading from shared ref)
+      // 2. Vault Auto-lock Logic
       if (autoLockMs && lastActiveRef) {
         const vaultRemaining = autoLockMs - (Date.now() - lastActiveRef.current);
         if (vaultRemaining > 0) {
@@ -67,7 +67,7 @@ export function SessionBar({ onSessionExpired, autoLockMs, lastActiveRef }: Prop
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [localExpiresAt, onSessionExpired, autoLockMs, lastActiveRef]);
+  }, [localExpiresAt, onSessionExpired, autoLockMs, lastActiveRef, isOfflineMode]);
 
   // eslint-disable-next-line react-hooks/purity
   const remaining = localExpiresAt - Date.now();
@@ -80,12 +80,19 @@ export function SessionBar({ onSessionExpired, autoLockMs, lastActiveRef }: Prop
   return (
     <div className="fixed top-0 right-0 left-0 z-40 flex items-center justify-between bg-gray-800 px-4 py-1 text-xs text-white dark:bg-gray-950">
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Clock size={12} />
-          <span>
-            Session: <span className={`font-mono tabular-nums ${isSessionLow ? 'font-bold text-red-400' : 'text-green-400'}`}>{timeLeft}</span>
-          </span>
-        </div>
+        {isOfflineMode ? (
+          <div className="flex items-center gap-2 text-amber-400">
+            <WifiOff size={12} />
+            <span className="font-medium">Offline Mode</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Clock size={12} />
+            <span>
+              Session: <span className={`font-mono tabular-nums ${isSessionLow ? 'font-bold text-red-400' : 'text-green-400'}`}>{timeLeft}</span>
+            </span>
+          </div>
+        )}
 
         {autoLockMs && (
           <div className="flex items-center gap-2 border-l border-gray-600 pl-4">

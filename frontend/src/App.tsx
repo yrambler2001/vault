@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Unlock, Save } from 'lucide-react';
+import { Unlock, Save, Download, WifiOff } from 'lucide-react';
 import * as cryptoLib from './lib/crypto';
 import * as webauthnLib from './lib/webauthn';
 import { api } from './lib/api';
-import type { VaultMeta } from './lib/api';
+import type { VaultMeta, VaultDataResponse } from './lib/api';
 import type { VaultEntry, VaultPayload } from './lib/types';
 import { LATEST_VERSION } from './lib/migrations';
 import { VaultError, ErrorCodes, friendlyMessages } from './lib/errors';
@@ -23,6 +23,7 @@ import { VaultBrowser } from './components/vault/VaultBrowser';
 import { BiometricDevicesPanel } from './components/devices/BiometricDevicesPanel';
 import { ApiWebAuthnPanel } from './components/devices/ApiWebAuthnPanel';
 import { USBDrivesPanel } from './components/drives/USBDrivesPanel';
+
 // ── Types ──
 
 type AppState = 'loading' | 'setup_api_key' | 'enter_api_key' | 'setup_vault' | 'locked' | 'unlocked';
@@ -51,25 +52,21 @@ export default function App() {
 
   // Editing state
   const [editingEntries, setEditingEntries] = useState<VaultEntry[]>([]);
-  /**
-   * Dirty flag for unsaved changes detection.
-   *
-   * DESIGN NOTE: We use an explicit dirty flag rather than
-   * `JSON.stringify(editingPasswords) !== JSON.stringify(passwords)`.
-   * The JSON comparison approach runs O(n) serialization on every render,
-   * which is wasteful for large vaults. The dirty flag is O(1) and is
-   * set on any edit, cleared on save. This is intentional and by design.
-   */
   const [isDirty, setIsDirty] = useState(false);
+
   // WebAuthn state
   const [webauthnAvailable, setWebauthnAvailable] = useState(false);
+
+  // Offline mode state
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [offlineVaultData, setOfflineVaultData] = useState<VaultDataResponse | null>(null);
 
   // Refs
   const dekRef = useRef<CryptoKey | null>(null);
   const vaultVersionRef = useRef<number>(0);
   const autoLockTimer = useRef<AutoLockTimer | null>(null);
   const handleServerLogoutRef = useRef<() => void>(() => {});
-  // eslint-disable-next-line react-hooks/purity
+
   const lastActiveRef = useRef<number>(Date.now());
 
   // ── Theme ──
@@ -112,7 +109,6 @@ export default function App() {
         } else if (err.message === 'NETWORK_ERROR') {
           showNotification('error', friendlyMessages.NETWORK_ERROR);
         } else if (err.message === 'CSRF_TOKEN_INVALID') {
-          // Auto-refresh CSRF token and show user-friendly message
           api.fetchCsrfToken().catch(() => {});
           showNotification('warning', friendlyMessages.CSRF_INVALID);
         } else {
@@ -130,17 +126,21 @@ export default function App() {
   // ── Server logout ──
 
   const handleServerLogout = useCallback(() => {
-    api.logout().catch(() => {});
-    api.clearCsrfToken();
+    if (!isOfflineMode) {
+      api.logout().catch(() => {});
+      api.clearCsrfToken();
+    }
     setDekSafe(null);
     setDekExtractable(null);
     setEditingEntries([]);
     setIsDirty(false);
     setVaultVersionSafe(0);
     setVaultMeta(null);
+    setIsOfflineMode(false);
+    setOfflineVaultData(null);
     autoLockTimer.current?.stop();
     setAppState('enter_api_key');
-  }, []);
+  }, [isOfflineMode]);
 
   useEffect(() => {
     handleServerLogoutRef.current = handleServerLogout;
@@ -192,10 +192,10 @@ export default function App() {
     }
   }, [appState, handleVaultLock, autoLockMs]);
 
-  // ── Unsaved changes warning ──
+  // ── Unsaved changes warning (only in online mode) ──
 
   useEffect(() => {
-    if (isDirty) {
+    if (isDirty && !isOfflineMode) {
       const handler = (e: BeforeUnloadEvent) => {
         e.preventDefault();
         e.returnValue = '';
@@ -203,7 +203,7 @@ export default function App() {
       window.addEventListener('beforeunload', handler);
       return () => window.removeEventListener('beforeunload', handler);
     }
-  }, [isDirty]);
+  }, [isDirty, isOfflineMode]);
 
   // ── WebAuthn check ──
 
@@ -226,7 +226,6 @@ export default function App() {
         try {
           const session = await api.getSession();
           if (session.valid) {
-            // Session is valid — fetch CSRF token (handles page reload / F5)
             await api.fetchCsrfToken();
             setAppState(status.vaultCreated ? 'locked' : 'setup_vault');
             return;
@@ -251,6 +250,18 @@ export default function App() {
     setAppState(status.vaultCreated ? 'locked' : 'setup_vault');
   }, []);
 
+  // ── Offline load handler ──
+
+  const handleOfflineLoad = useCallback(
+    (vaultData: VaultDataResponse) => {
+      setIsOfflineMode(true);
+      setOfflineVaultData(vaultData);
+      setAppState('locked');
+      showNotification('info', 'Vault file loaded. Enter your master password to decrypt.');
+    },
+    [showNotification],
+  );
+
   // ── Unlock handler ──
 
   const handleUnlock = useCallback((result: UnlockResult) => {
@@ -263,10 +274,47 @@ export default function App() {
     setAppState('unlocked');
   }, []);
 
+  // ── Download Vault JSON ──
+
+  const handleDownloadVault = useCallback(async () => {
+    try {
+      const vaultData = await api.getVaultData();
+
+      // Reconstruct the exact VaultDocument shape (strip keySlots)
+      const vaultDocument = {
+        meta: vaultData.meta,
+        keys: vaultData.keys,
+        data: vaultData.data,
+      };
+
+      const jsonString = JSON.stringify(vaultDocument, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+
+      const timestamp = new Date()
+        .toISOString()
+        .replace(/[-:]/g, '')
+        .replace(/\.\d+Z/, '');
+      const filename = `vault-backup-v${vaultData.meta.version}-${timestamp}.json`;
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showNotification('success', `Vault backup downloaded: ${filename}`);
+    } catch (e) {
+      showError(e);
+    }
+  }, [showNotification, showError]);
+
   // ── Manual Save ──
 
   const handleManualSave = useCallback(async () => {
-    if (isSaving) return;
+    if (isSaving || isOfflineMode) return;
 
     const currentDek = dekRef.current;
     const currentVersion = vaultVersionRef.current;
@@ -295,7 +343,7 @@ export default function App() {
     } finally {
       setIsSaving(false);
     }
-  }, [editingEntries, showNotification, showError, isSaving]);
+  }, [editingEntries, showNotification, showError, isSaving, isOfflineMode]);
 
   // ── Entry CRUD ──
 
@@ -342,6 +390,7 @@ export default function App() {
         hasApiWebAuthn={hasApiWebAuthn}
         webauthnAvailable={webauthnAvailable}
         onLoginSuccess={handleLoginSuccess}
+        onOfflineLoad={handleOfflineLoad}
         showNotification={showNotification}
         showError={showError}
         notification={notification}
@@ -372,32 +421,57 @@ export default function App() {
         showError={showError}
         notification={notification}
         onDismissNotification={dismissNotification}
+        offlineVaultData={offlineVaultData}
+        isOfflineMode={isOfflineMode}
       />
     );
   }
 
   // ── Unlocked ──
 
-  const tabs: { key: ActiveTab; label: string }[] = [
+  const tabs: { key: ActiveTab; label: string; disabled?: boolean }[] = [
     { key: 'vault', label: `Vault (${editingEntries.length})` },
-    { key: 'devices', label: 'Devices' },
-    { key: 'drives', label: 'USB Drives' },
+    { key: 'devices', label: 'Devices', disabled: isOfflineMode },
+    { key: 'drives', label: 'USB Drives', disabled: isOfflineMode },
   ];
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <SessionBar onSessionExpired={handleServerLogout} autoLockMs={autoLockMs} lastActiveRef={lastActiveRef} />
+      <SessionBar
+        onSessionExpired={isOfflineMode ? handleVaultLock : handleServerLogout}
+        autoLockMs={autoLockMs}
+        lastActiveRef={lastActiveRef}
+        isOfflineMode={isOfflineMode}
+      />
       <NotificationBanner notification={notification} onDismiss={dismissNotification} />
       <div className="mx-auto min-h-screen max-w-3xl bg-gray-50 px-4 pt-10 pb-8 dark:bg-gray-900">
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
           <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-100">
             <Unlock className="text-green-600" /> Secure Vault
+            {isOfflineMode && (
+              <span className="ml-2 flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-xs font-normal text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                <WifiOff size={12} /> Offline
+              </span>
+            )}
           </h1>
           <div className="flex items-center gap-2">
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <span className="text-xs text-gray-400">v{vaultVersion}</span>
-            {isDirty && (
+
+            {/* Download button (online mode only) */}
+            {!isOfflineMode && (
+              <button
+                onClick={handleDownloadVault}
+                className="flex items-center gap-1 rounded bg-gray-200 px-3 py-1 text-sm text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                title="Download vault JSON backup"
+              >
+                <Download size={14} /> Export
+              </button>
+            )}
+
+            {/* Save button */}
+            {!isOfflineMode && isDirty && (
               <button
                 onClick={handleManualSave}
                 disabled={isSaving}
@@ -406,15 +480,36 @@ export default function App() {
                 <Save size={14} /> {isSaving ? 'Saving...' : 'Save'}
               </button>
             )}
+
+            {/* Offline save disabled indicator */}
+            {isOfflineMode && isDirty && (
+              <span
+                className="flex items-center gap-1 rounded bg-gray-200 px-3 py-1 text-sm text-gray-400 dark:bg-gray-700 dark:text-gray-500"
+                title="Saving to server is disabled in offline mode"
+              >
+                <Save size={14} /> Save (disabled)
+              </span>
+            )}
+
             {isDirty && <span className="rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">unsaved</span>}
             <button onClick={handleVaultLock} className="rounded bg-amber-500 px-3 py-1.5 text-sm text-white hover:bg-amber-600">
               Lock
             </button>
             <button onClick={handleServerLogout} className="rounded bg-red-500 px-3 py-1.5 text-sm text-white hover:bg-red-600">
-              Logout
+              {isOfflineMode ? 'Exit' : 'Logout'}
             </button>
           </div>
         </div>
+
+        {/* Offline mode banner */}
+        {isOfflineMode && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+            <WifiOff size={16} />
+            <span>
+              <strong>Offline mode</strong> — You are viewing a local vault file. Editing is possible in memory but saving to the server is disabled.
+            </span>
+          </div>
+        )}
 
         {/* Password Generator */}
         <PasswordGenerator />
@@ -424,11 +519,14 @@ export default function App() {
           {tabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => !tab.disabled && setActiveTab(tab.key)}
+              disabled={tab.disabled}
               className={`border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
-                activeTab === tab.key
-                  ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                tab.disabled
+                  ? 'cursor-not-allowed border-transparent text-gray-300 dark:text-gray-600'
+                  : activeTab === tab.key
+                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
               }`}
             >
               {tab.label}
@@ -441,7 +539,7 @@ export default function App() {
           <VaultBrowser entries={editingEntries} onAddEntry={handleAddEntry} onUpdateEntry={handleUpdateEntry} onDeleteEntry={handleDeleteEntry} />
         )}
 
-        {activeTab === 'devices' && (
+        {activeTab === 'devices' && !isOfflineMode && (
           <>
             <BiometricDevicesPanel
               vaultMeta={vaultMeta}
@@ -455,7 +553,7 @@ export default function App() {
           </>
         )}
 
-        {activeTab === 'drives' && <USBDrivesPanel />}
+        {activeTab === 'drives' && !isOfflineMode && <USBDrivesPanel />}
       </div>
     </div>
   );

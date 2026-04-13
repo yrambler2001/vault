@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Lock, Fingerprint } from 'lucide-react';
+import { Lock, Fingerprint, WifiOff } from 'lucide-react';
 import * as cryptoLib from '../../lib/crypto';
 import * as webauthnLib from '../../lib/webauthn';
 import { api } from '../../lib/api';
@@ -7,7 +7,7 @@ import { VaultError, ErrorCodes, friendlyMessages } from '../../lib/errors';
 import { runMigrations } from '../../lib/migrations';
 import { SessionBar } from '../SessionBar';
 import { NotificationBanner, Notification } from '../NotificationBanner';
-import type { VaultMeta } from '../../lib/api';
+import type { VaultMeta, VaultDataResponse } from '../../lib/api';
 import type { VaultEntry, VaultPayload } from '../../lib/types';
 
 export interface UnlockResult {
@@ -27,21 +27,36 @@ interface Props {
   showError: (err: unknown) => void;
   notification: Notification | null;
   onDismissNotification: () => void;
+  /** If provided, use this data instead of fetching from the server (offline mode) */
+  offlineVaultData?: VaultDataResponse | null;
+  isOfflineMode?: boolean;
 }
 
-export function LockedVault({ onUnlock, onLogout, showNotification, showError, notification, onDismissNotification }: Props) {
+export function LockedVault({ onUnlock, onLogout, showNotification, showError, notification, onDismissNotification, offlineVaultData, isOfflineMode }: Props) {
   const [masterPasswordInput, setMasterPasswordInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [hasBiometrics, setHasBiometrics] = useState(false);
 
   const checkBiometricDevices = useCallback(async () => {
+    if (isOfflineMode) {
+      // In offline mode, we can still attempt biometric unlock if there are
+      // PRF key slots other than master_password in the uploaded vault data.
+      if (offlineVaultData) {
+        const prfSlots = Object.keys(offlineVaultData.keys).filter((k) => k !== 'master_password');
+        setHasBiometrics(prfSlots.length > 0);
+      } else {
+        setHasBiometrics(false);
+      }
+      return;
+    }
+
     try {
       const { credentials } = await api.getWebAuthnAuthOptions();
       setHasBiometrics(credentials.length > 0);
     } catch {
       setHasBiometrics(false);
     }
-  }, []);
+  }, [isOfflineMode, offlineVaultData]);
 
   useEffect(() => {
     checkBiometricDevices();
@@ -55,7 +70,13 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
 
     setLoading(true);
     try {
-      const vaultData = await api.getVaultData();
+      let vaultData: VaultDataResponse;
+
+      if (isOfflineMode && offlineVaultData) {
+        vaultData = offlineVaultData;
+      } else {
+        vaultData = await api.getVaultData();
+      }
 
       let kek: CryptoKey;
       let slotId: string;
@@ -63,6 +84,16 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
       if (method === 'password') {
         kek = await cryptoLib.deriveKEK(masterPasswordInput, vaultData.meta.passwordSalt, vaultData.meta.kdfParams);
         slotId = 'master_password';
+      } else if (isOfflineMode) {
+        // In offline mode, use the vault meta to build PRF credential hints.
+        // We don't have server-side auth options, so we need the user's
+        // browser to already have the credential registered on this origin.
+        // We use the rpId from the current hostname and build credential
+        // hints from the key slots in the vault data.
+        const authOptions = await api.getWebAuthnAuthOptions();
+        const result = await webauthnLib.authenticateWithPRF(authOptions.rpId, authOptions.credentials);
+        kek = result.kek;
+        slotId = result.slotId;
       } else {
         const authOptions = await api.getWebAuthnAuthOptions();
         const result = await webauthnLib.authenticateWithPRF(authOptions.rpId, authOptions.credentials);
@@ -118,7 +149,9 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
         migrated,
       });
 
-      if (migrated) {
+      if (isOfflineMode) {
+        showNotification('success', 'Vault unlocked in offline mode. Saving to server is disabled.');
+      } else if (migrated) {
         showNotification('warning', 'Vault data was migrated to the latest format. Please save to persist the changes.');
       } else {
         showNotification('success', method === 'biometric' ? 'Vault unlocked with biometrics.' : 'Vault unlocked.');
@@ -132,15 +165,22 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
 
   return (
     <>
-      <SessionBar onSessionExpired={onLogout} />
+      {!isOfflineMode && <SessionBar onSessionExpired={onLogout} />}
       <NotificationBanner notification={notification} onDismiss={onDismissNotification} />
       <div className="flex min-h-screen items-center justify-center bg-gray-50 pt-8 dark:bg-gray-900">
         <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-8 shadow dark:border-gray-700 dark:bg-gray-800">
+          {isOfflineMode && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+              <WifiOff size={16} />
+              <span>Offline mode — saving to server is disabled</span>
+            </div>
+          )}
+
           <h1 className="mb-6 flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
             <Lock className="text-amber-600 dark:text-amber-400" /> Vault Locked
           </h1>
 
-          {hasBiometrics && (
+          {hasBiometrics && !isOfflineMode && (
             <button
               onClick={() => handleUnlock('biometric')}
               disabled={loading}
@@ -151,7 +191,7 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
             </button>
           )}
 
-          {hasBiometrics && (
+          {hasBiometrics && !isOfflineMode && (
             <div className="my-4 flex items-center gap-3">
               <div className="flex-1 border-t border-gray-200 dark:border-gray-600" />
               <span className="text-xs text-gray-400 uppercase">or use password</span>
@@ -179,7 +219,7 @@ export function LockedVault({ onUnlock, onLogout, showNotification, showError, n
             onClick={onLogout}
             className="mt-4 w-full text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
-            ← Disconnect from server
+            {isOfflineMode ? '← Exit Offline Mode' : '← Disconnect from server'}
           </button>
         </div>
       </div>
